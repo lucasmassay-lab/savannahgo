@@ -1,7 +1,58 @@
 Pi.init({ version: "2.0", sandbox: true });
 
 let accessToken = null;
+let currentUser = null;
+let safaris = [];
 
+// ---------- Status helper ----------
+function showStatus(message, type = 'info') {
+  const el = document.getElementById('status');
+  el.textContent = message;
+  el.className = 'show ' + type;
+  setTimeout(() => { el.className = ''; }, 5000);
+}
+
+// ---------- Load safaris ----------
+async function loadSafaris() {
+  try {
+    const res = await fetch('/api/safaris');
+    const data = await res.json();
+    safaris = data.safaris || [];
+    renderSafaris();
+  } catch (err) {
+    console.error('Failed to load safaris', err);
+    document.getElementById('safariGrid').innerHTML =
+      '<p>Could not load safaris. Please refresh.</p>';
+  }
+}
+
+function renderSafaris() {
+  const grid = document.getElementById('safariGrid');
+  if (safaris.length === 0) {
+    grid.innerHTML = '<p>No safaris available right now.</p>';
+    return;
+  }
+  grid.innerHTML = safaris.map(s => `
+    <div class="safari-card">
+      <img src="${s.image_url}" alt="${s.name}" loading="lazy" />
+      <div class="safari-body">
+        <h3>${s.name}</h3>
+        <div class="safari-loc">📍 ${s.location}</div>
+        <div class="safari-desc">${s.description}</div>
+        <div class="safari-meta">
+          <div class="safari-price">
+            ${s.price_pi} π <small>/ ${s.duration_days} day${s.duration_days > 1 ? 's' : ''}</small>
+          </div>
+          <button onclick="bookSafari(${s.id})" ${accessToken ? '' : 'disabled'}>
+            Book
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ---------- Auth ----------
 document.getElementById('login').onclick = async () => {
   try {
     const auth = await window.Pi.authenticate(
@@ -9,11 +60,19 @@ document.getElementById('login').onclick = async () => {
       onIncompletePayment
     );
     accessToken = auth.accessToken;
+    currentUser = auth.user;
     await verifyOnServer(accessToken);
-    document.getElementById('status').innerText = `Hello, ${auth.user.username}`;
-    document.getElementById('pay').disabled = false;
+
+    document.getElementById('userDisplay').innerHTML =
+      `Signed in as <span class="user">${currentUser.username}</span>`;
+    document.getElementById('login').style.display = 'none';
+
+    renderSafaris();
+    loadBookings();
+    showStatus(`Welcome, ${currentUser.username}!`, 'success');
   } catch (err) {
     console.error('Auth failed', err);
+    showStatus('Sign-in failed. Please try again.', 'error');
   }
 };
 
@@ -37,9 +96,19 @@ function onIncompletePayment(payment) {
   });
 }
 
-document.getElementById('pay').onclick = () => {
+// ---------- Booking (payment) ----------
+function bookSafari(safariId) {
+  const safari = safaris.find(s => s.id === safariId);
+  if (!safari) return;
+
+  showStatus(`Preparing payment for ${safari.name}...`, 'info');
+
   window.Pi.createPayment(
-    { amount: 1, memo: 'Unlock Premium', metadata: { feature: 'premium' } },
+    {
+      amount: safari.price_pi,
+      memo: `Booking: ${safari.name}`,
+      metadata: { safari_id: safari.id, safari_name: safari.name },
+    },
     {
       onReadyForServerApproval: async (paymentId) => {
         await fetch('/api/payments/approve', {
@@ -60,12 +129,72 @@ document.getElementById('pay').onclick = () => {
           },
           body: JSON.stringify({ paymentId, txid }),
         });
+
         if (res.ok) {
-          document.getElementById('status').innerText = 'Payment complete';
+          // Record the booking against the safari
+          await fetch('/api/bookings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              paymentId,
+              safariId: safari.id,
+            }),
+          });
+
+          showStatus(`✅ Booking confirmed: ${safari.name}`, 'success');
+          loadBookings();
         }
       },
-      onCancel: (paymentId) => console.log('Cancelled:', paymentId),
-      onError: (error, payment) => console.error('Payment error:', error, payment),
+      onCancel: (paymentId) => {
+        console.log('Cancelled:', paymentId);
+        showStatus('Payment cancelled.', 'info');
+      },
+      onError: (error, payment) => {
+        console.error('Payment error:', error, payment);
+        showStatus('Payment failed. Please try again.', 'error');
+      },
     }
   );
-};
+}
+
+// ---------- Load bookings ----------
+async function loadBookings() {
+  if (!accessToken) return;
+  try {
+    const res = await fetch('/api/bookings', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderBookings(data.bookings || []);
+  } catch (err) {
+    console.error('Failed to load bookings', err);
+  }
+}
+
+function renderBookings(bookings) {
+  const section = document.getElementById('bookingsSection');
+  const list = document.getElementById('bookingsList');
+
+  if (bookings.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  list.innerHTML = bookings.map(b => `
+    <div class="booking-row">
+      <div class="booking-info">
+        <strong>${b.safari_name}</strong><br>
+        <small>${b.price_pi} π • ${new Date(b.created_at).toLocaleDateString()}</small>
+      </div>
+      <span class="booking-status status-${b.status}">${b.status}</span>
+    </div>
+  `).join('');
+}
+
+// ---------- Init ----------
+loadSafaris();

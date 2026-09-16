@@ -1,14 +1,161 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>SavannahGo</title>
-    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
-  </head>
-  <body>
-    <h1>SavannahGo</h1>
-    <button id="login">Sign in with Pi</button>
-    <button id="pay" disabled>Pay 1 Pi</button>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SavannahGo — African Safaris</title>
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f2eb;
+      color: #1a1a1a;
+      line-height: 1.5;
+    }
+    header {
+      background: linear-gradient(135deg, #8b5a2b, #c27a3a);
+      color: #fff;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    header h1 { font-size: 28px; letter-spacing: 1px; }
+    header p { font-size: 14px; opacity: 0.9; margin-top: 4px; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+
+    .auth-bar {
+      background: #fff;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .auth-bar .user { font-weight: 600; color: #8b5a2b; }
+    button {
+      background: #8b5a2b;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    button:hover:not(:disabled) { background: #6d4620; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+
+    h2 { margin-bottom: 16px; color: #2b2b2b; font-size: 22px; }
+
+    .safari-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .safari-card {
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .safari-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    }
+    .safari-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+    }
+    .safari-body { padding: 16px; flex: 1; display: flex; flex-direction: column; }
+    .safari-body h3 { font-size: 18px; margin-bottom: 4px; color: #2b2b2b; }
+    .safari-loc { font-size: 13px; color: #8b5a2b; font-weight: 600; margin-bottom: 8px; }
+    .safari-desc { font-size: 14px; color: #555; flex: 1; margin-bottom: 12px; }
+    .safari-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+    }
+    .safari-price { font-size: 16px; font-weight: 700; color: #8b5a2b; }
+    .safari-price small { font-weight: 400; color: #888; font-size: 12px; }
+    .safari-card button { padding: 8px 16px; font-size: 14px; }
+
+    .bookings-section { margin-top: 40px; }
+    .booking-row {
+      background: #fff;
+      padding: 14px 16px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .booking-info { font-size: 14px; }
+    .booking-info strong { color: #2b2b2b; }
+    .booking-status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-completed { background: #d4edda; color: #155724; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-cancelled { background: #f8d7da; color: #721c24; }
+
+    #status {
+      font-size: 14px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    #status.show { display: block; }
+    #status.success { background: #d4edda; color: #155724; }
+    #status.error { background: #f8d7da; color: #721c24; }
+    #status.info { background: #d1ecf1; color: #0c5460; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🌍 SavannahGo</h1>
+    <p>Discover, book, and pay for African safaris — all with Pi</p>
+  </header>
+
+  <div class="container">
+    <div class="auth-bar">
+      <span id="userDisplay">Not signed in</span>
+      <button id="login">Sign in with Pi</button>
+    </div>
+
     <p id="status"></p>
-    <script src="/app.js"></script>
-  </body>
+
+    <section>
+      <h2>Available Safaris</h2>
+      <div id="safariGrid" class="safari-grid">
+        <p>Loading safaris...</p>
+      </div>
+    </section>
+
+    <section class="bookings-section" id="bookingsSection" style="display:none;">
+      <h2>My Bookings</h2>
+      <div id="bookingsList"></div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
 </html>
