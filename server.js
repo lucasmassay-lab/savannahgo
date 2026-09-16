@@ -1,4 +1,5 @@
 const express = require('express');
+const db = require('./db');
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
@@ -6,16 +7,42 @@ app.use(express.static('public'));
 const PI_API_BASE = 'https://api.minepi.com/v2';
 const PI_API_KEY = process.env.PI_API_KEY;
 
+// -------- Health check --------
+app.get('/api/db-test', async (req, res) => {
+  try {
+    const result = await db.execute('SELECT 1 as test');
+    res.json({ ok: true, test: result.rows[0].test });
+  } catch (err) {
+    console.error('>>> DB ERROR:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// -------- Verify user & save to DB --------
 app.post('/api/verify', async (req, res) => {
   const accessToken = req.headers.authorization?.replace('Bearer ', '');
   const piRes = await fetch(`${PI_API_BASE}/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!piRes.ok) return res.status(401).json({ error: 'Unauthorized' });
+
   const user = await piRes.json();
+
+  try {
+    await db.execute({
+      sql: `INSERT INTO users (uid, username) VALUES (?, ?)
+            ON CONFLICT(uid) DO UPDATE SET username = excluded.username`,
+      args: [user.uid, user.username],
+    });
+    console.log('>>> User saved:', user.username, `(${user.uid})`);
+  } catch (err) {
+    console.error('>>> DB ERROR saving user:', err.message);
+  }
+
   res.json({ uid: user.uid, username: user.username });
 });
 
+// -------- Approve payment + log to DB --------
 app.post('/api/payments/approve', async (req, res) => {
   const { paymentId } = req.body;
   console.log('>>> Received approve request for:', paymentId);
@@ -36,6 +63,28 @@ app.post('/api/payments/approve', async (req, res) => {
     console.log('>>> Pi approve response status:', approval.status);
     console.log('>>> Pi approve response body:', body);
 
+    if (approval.ok) {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        await db.execute({
+          sql: `INSERT INTO payments (payment_id, uid, amount, memo, status)
+                VALUES (?, ?, ?, ?, 'approved')
+                ON CONFLICT(payment_id) DO UPDATE SET
+                  status = 'approved',
+                  updated_at = CURRENT_TIMESTAMP`,
+          args: [
+            paymentId,
+            parsed.user_uid || null,
+            parsed.amount || null,
+            parsed.memo || null,
+          ],
+        });
+        console.log('>>> Payment logged (approved):', paymentId);
+      } catch (dbErr) {
+        console.error('>>> DB ERROR logging approve:', dbErr.message);
+      }
+    }
+
     res.status(approval.status).json(JSON.parse(body || '{}'));
   } catch (err) {
     console.log('>>> FETCH ERROR:', err.message);
@@ -43,6 +92,7 @@ app.post('/api/payments/approve', async (req, res) => {
   }
 });
 
+// -------- Complete payment + update DB --------
 app.post('/api/payments/complete', async (req, res) => {
   const { paymentId, txid } = req.body;
   console.log('>>> Received complete request for:', paymentId);
@@ -60,6 +110,22 @@ app.post('/api/payments/complete', async (req, res) => {
     const body = await completion.text();
     console.log('>>> Pi complete response status:', completion.status);
     console.log('>>> Pi complete response body:', body);
+
+    if (completion.ok) {
+      try {
+        await db.execute({
+          sql: `UPDATE payments
+                SET status = 'completed',
+                    txid = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE payment_id = ?`,
+          args: [txid || null, paymentId],
+        });
+        console.log('>>> Payment marked completed:', paymentId, 'txid:', txid);
+      } catch (dbErr) {
+        console.error('>>> DB ERROR marking complete:', dbErr.message);
+      }
+    }
 
     res.status(completion.status).json(JSON.parse(body || '{}'));
   } catch (err) {
