@@ -3,6 +3,8 @@ Pi.init({ version: "2.0", sandbox: true });
 let accessToken = null;
 let currentUser = null;
 let safaris = [];
+let allSafaris = [];
+let filteredSafaris = [];
 
 // ---------- Modal ----------
 function showModal(message) {
@@ -28,21 +30,78 @@ async function loadSafaris() {
     const res = await fetch('/api/safaris');
     const data = await res.json();
     safaris = data.safaris || [];
-    renderSafaris();
+    allSafaris = safaris;
+    filteredSafaris = safaris;
+    renderFilteredSafaris();
   } catch (err) {
     console.error('Failed to load safaris', err);
-    document.getElementById('safariGrid').innerHTML =
-      '<p>Could not load safaris. Please refresh.</p>';
+    const grid = document.getElementById('safariGrid');
+    if (grid) {
+      grid.innerHTML = '<div class="empty-state">Could not load safaris. Please refresh.</div>';
+    }
   }
 }
 
-function renderSafaris() {
+// ---------- Filter helpers ----------
+function populateCountryFilter() {
+  const select = document.getElementById('countryFilter');
+  if (!select) return;
+
+  const countries = new Set();
+  allSafaris.forEach(s => {
+    if (s.location && s.location.includes(',')) {
+      const country = s.location.split(',').pop().trim();
+      countries.add(country);
+    }
+  });
+
+  const sorted = [...countries].sort();
+  select.innerHTML = '<option value="">All countries</option>' +
+    sorted.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function applyFilters() {
+  const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+  const country = document.getElementById('countryFilter')?.value || '';
+  const priceRange = document.getElementById('priceFilter')?.value || '';
+  const durationRange = document.getElementById('durationFilter')?.value || '';
+
+  filteredSafaris = allSafaris.filter(s => {
+    if (search) {
+      const haystack = `${s.name} ${s.location} ${s.description}`.toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    if (country && s.location && !s.location.endsWith(country)) return false;
+    if (priceRange) {
+      const [min, max] = priceRange.split('-').map(Number);
+      if (s.price_pi < min || s.price_pi > max) return false;
+    }
+    if (durationRange) {
+      const [min, max] = durationRange.split('-').map(Number);
+      if (s.duration_days < min || s.duration_days > max) return false;
+    }
+    return true;
+  });
+
+  renderFilteredSafaris();
+}
+
+function renderFilteredSafaris() {
   const grid = document.getElementById('safariGrid');
-  if (safaris.length === 0) {
-    grid.innerHTML = '<div class="empty-state">No safaris available right now.</div>';
+  const countEl = document.getElementById('filterResultCount');
+  if (!grid) return;
+
+  if (filteredSafaris.length === 0) {
+    grid.innerHTML = '<div class="empty-state">No safaris match your filters. Try clearing them.</div>';
+    if (countEl) countEl.textContent = '';
     return;
   }
-    grid.innerHTML = safaris.map(s => `
+
+  if (countEl) {
+    countEl.textContent = `Showing ${filteredSafaris.length} of ${allSafaris.length} safaris`;
+  }
+
+  grid.innerHTML = filteredSafaris.map(s => `
     <a href="/safari/${s.id}" class="safari-card">
       <img src="${s.image_url}" alt="${s.name}" loading="lazy" />
       <div class="safari-body">
@@ -58,6 +117,29 @@ function renderSafaris() {
       </div>
     </a>
   `).join('');
+}
+
+function attachFilterHandlers() {
+  const search = document.getElementById('searchInput');
+  const country = document.getElementById('countryFilter');
+  const price = document.getElementById('priceFilter');
+  const duration = document.getElementById('durationFilter');
+  const clear = document.getElementById('clearFilters');
+
+  if (search) search.addEventListener('input', applyFilters);
+  if (country) country.addEventListener('change', applyFilters);
+  if (price) price.addEventListener('change', applyFilters);
+  if (duration) duration.addEventListener('change', applyFilters);
+
+  if (clear) {
+    clear.addEventListener('click', () => {
+      if (search) search.value = '';
+      if (country) country.value = '';
+      if (price) price.value = '';
+      if (duration) duration.value = '';
+      applyFilters();
+    });
+  }
 }
 
 // ---------- Auth ----------
@@ -78,7 +160,7 @@ document.getElementById('login').onclick = async () => {
     `;
     document.getElementById('login').style.display = 'none';
 
-    renderSafaris();
+    renderFilteredSafaris();
     loadBookings();
     showStatus(`Welcome, ${currentUser.username}!`, 'success');
   } catch (err) {
@@ -107,7 +189,7 @@ function onIncompletePayment(payment) {
   });
 }
 
-// ---------- Booking (payment) ----------
+// ---------- Booking ----------
 function bookSafari(safariId) {
   const safari = safaris.find(s => s.id === safariId);
   if (!safari) return;
@@ -148,10 +230,7 @@ function bookSafari(safariId) {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({
-              paymentId,
-              safariId: safari.id,
-            }),
+            body: JSON.stringify({ paymentId, safariId: safari.id }),
           });
 
           showStatus(`✅ Booking confirmed: ${safari.name}`, 'success');
@@ -171,7 +250,7 @@ function bookSafari(safariId) {
   );
 }
 
-// ---------- Load bookings ----------
+// ---------- Bookings ----------
 async function loadBookings() {
   if (!accessToken) return;
   try {
@@ -189,6 +268,7 @@ async function loadBookings() {
 function renderBookings(bookings) {
   const section = document.getElementById('bookingsSection');
   const list = document.getElementById('bookingsList');
+  if (!section || !list) return;
 
   if (bookings.length === 0) {
     section.style.display = 'block';
@@ -208,44 +288,7 @@ function renderBookings(bookings) {
   `).join('');
 }
 
-// ---------- Router ----------
-function route() {
-  const path = window.location.pathname;
-
-  if (path === '/' || path === '/index.html') {
-    renderListingsPage();
-  } else if (path.startsWith('/safari/')) {
-    const id = path.split('/')[2];
-    renderDetailPage(id);
-  } else {
-    renderListingsPage();
-  }
-}
-
-async function renderListingsPage() {
-  // Restore listings layout
-  document.getElementById('mainContent').innerHTML = `
-    <section>
-      <h2>🦁 Available Safaris</h2>
-      <div id="safariGrid" class="safari-grid">
-        <div class="skeleton"></div>
-        <div class="skeleton"></div>
-        <div class="skeleton"></div>
-      </div>
-    </section>
-    <section class="bookings-section" id="bookingsSection" style="display:none;">
-      <h2>🎫 My Bookings</h2>
-      <div id="bookingsList"></div>
-    </section>
-  `;
-
-  await loadSafaris();
-
-  if (accessToken) {
-    loadBookings();
-  }
-}
-
+// ---------- Detail page ----------
 async function renderDetailPage(id) {
   const container = document.getElementById('mainContent');
   container.innerHTML = '<div class="skeleton" style="height:400px;"></div>';
@@ -267,7 +310,7 @@ async function renderDetailPage(id) {
 function renderSafariDetail(s) {
   const container = document.getElementById('mainContent');
   container.innerHTML = `
-    <a href="/" class="back-link" onclick="event.preventDefault(); navigate('/')">← Back to safaris</a>
+    <a href="/" class="back-link">← Back to safaris</a>
 
     <div class="detail-hero">
       <img src="${s.image_url}" alt="${s.name}" />
@@ -297,16 +340,80 @@ function renderSafariDetail(s) {
   `;
 }
 
-// Simple navigation helper
+// ---------- Listings page ----------
+async function renderListingsPage() {
+  document.getElementById('mainContent').innerHTML = `
+    <section>
+      <h2>🦁 Available Safaris</h2>
+
+      <div class="filter-bar">
+        <input
+          type="text"
+          id="searchInput"
+          class="filter-search"
+          placeholder="🔍 Search safaris, countries, parks..."
+        />
+        <select id="countryFilter" class="filter-select">
+          <option value="">All countries</option>
+        </select>
+        <select id="priceFilter" class="filter-select">
+          <option value="">All prices</option>
+          <option value="0-5">Under 5 π</option>
+          <option value="5-15">5 – 15 π</option>
+          <option value="15-999">Over 15 π</option>
+        </select>
+        <select id="durationFilter" class="filter-select">
+          <option value="">Any duration</option>
+          <option value="1-2">1 – 2 days</option>
+          <option value="3-5">3 – 5 days</option>
+          <option value="6-99">6+ days</option>
+        </select>
+        <button id="clearFilters" class="clear-btn">Clear</button>
+      </div>
+
+      <div id="safariGrid" class="safari-grid">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+      <p id="filterResultCount" class="filter-count"></p>
+    </section>
+    <section class="bookings-section" id="bookingsSection" style="display:none;">
+      <h2>🎫 My Bookings</h2>
+      <div id="bookingsList"></div>
+    </section>
+  `;
+
+  await loadSafaris();
+  populateCountryFilter();
+  attachFilterHandlers();
+
+  if (accessToken) {
+    loadBookings();
+  }
+}
+
+// ---------- Router ----------
+function route() {
+  const path = window.location.pathname;
+
+  if (path === '/' || path === '/index.html') {
+    renderListingsPage();
+  } else if (path.startsWith('/safari/')) {
+    const id = path.split('/')[2];
+    renderDetailPage(id);
+  } else {
+    renderListingsPage();
+  }
+}
+
 function navigate(url) {
   history.pushState({}, '', url);
   route();
 }
 
-// Handle browser back/forward
 window.addEventListener('popstate', route);
 
-// Intercept clicks on cards for smooth navigation
 document.addEventListener('click', (e) => {
   const link = e.target.closest('a[href^="/"]');
   if (link && !link.hasAttribute('onclick')) {

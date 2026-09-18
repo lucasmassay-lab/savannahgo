@@ -104,6 +104,66 @@
       color: #8b5a2b;
       font-weight: 600;
       font-size: 14px;
+    }    /* ---------- Filter bar ---------- */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-search {
+      flex: 1;
+      min-width: 200px;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      font-size: 15px;
+      font-family: inherit;
+      background: #fff;
+    }
+    .filter-search:focus {
+      outline: none;
+      border-color: #8b5a2b;
+    }
+    .filter-select {
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+      cursor: pointer;
+      min-width: 140px;
+    }
+    .filter-select:focus {
+      outline: none;
+      border-color: #8b5a2b;
+    }
+    .clear-btn {
+      padding: 12px 18px;
+      font-size: 14px;
+      background: #f0ebe0;
+      color: #8b5a2b;
+    }
+    .clear-btn:hover {
+      background: #e5dece;
+    }
+    .filter-count {
+      font-size: 13px;
+      color: #888;
+      margin-top: -8px;
+      margin-bottom: 16px;
+    }
+    .safari-card { text-decoration: none; color: inherit; }
+    .view-btn {
+      color: #8b5a2b;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    @media (max-width: 500px) {
+      .filter-bar { flex-direction: column; align-items: stretch; }
+      .filter-select, .filter-search, .clear-btn { width: 100%; }
     }<style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
