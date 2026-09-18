@@ -72,7 +72,23 @@ app.get('/api/safaris/:id', async (req, res) => {
       return res.status(404).json({ error: 'Safari not found' });
     }
 
-    res.json({ safari: result.rows[0] });
+    // Get rating summary
+    const ratingResult = await db.execute({
+      sql: `SELECT
+              COUNT(*) as review_count,
+              ROUND(AVG(rating), 1) as avg_rating
+            FROM reviews WHERE safari_id = ?`,
+      args: [safariId],
+    });
+    const rating = ratingResult.rows[0] || { review_count: 0, avg_rating: null };
+
+    res.json({
+      safari: result.rows[0],
+      rating: {
+        count: rating.review_count,
+        average: rating.avg_rating,
+      },
+    });
   } catch (err) {
     console.error('>>> DB ERROR loading safari:', err.message);
     res.status(500).json({ error: err.message });
@@ -166,6 +182,71 @@ app.post('/api/payments/complete', async (req, res) => {
     res.status(completion.status).json(JSON.parse(body || '{}'));
   } catch (err) {
     console.log('>>> FETCH ERROR:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});// -------- Get reviews for a safari ----------
+app.get('/api/safaris/:id/reviews', async (req, res) => {
+  const safariId = parseInt(req.params.id, 10);
+  if (isNaN(safariId)) return res.status(400).json({ error: 'Invalid safari id' });
+
+  try {
+    const result = await db.execute({
+      sql: `SELECT id, username, rating, comment, created_at
+            FROM reviews
+            WHERE safari_id = ?
+            ORDER BY created_at DESC`,
+      args: [safariId],
+    });
+    res.json({ reviews: result.rows });
+  } catch (err) {
+    console.error('>>> DB ERROR listing reviews:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- Create or update a review ----------
+app.post('/api/safaris/:id/reviews', async (req, res) => {
+  const safariId = parseInt(req.params.id, 10);
+  const { rating, comment } = req.body;
+  const accessToken = req.headers.authorization?.replace('Bearer ', '');
+
+  if (isNaN(safariId)) return res.status(400).json({ error: 'Invalid safari id' });
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be 1–5' });
+  }
+
+  try {
+    // Verify user
+    const piRes = await fetch(`${PI_API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!piRes.ok) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await piRes.json();
+
+    // Check the user has actually booked this safari
+    const bookingCheck = await db.execute({
+      sql: 'SELECT 1 FROM bookings WHERE uid = ? AND safari_id = ? LIMIT 1',
+      args: [user.uid, safariId],
+    });
+    if (bookingCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You must book this safari before reviewing it' });
+    }
+
+    // Insert or update the review
+    await db.execute({
+      sql: `INSERT INTO reviews (uid, username, safari_id, rating, comment)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(uid, safari_id) DO UPDATE SET
+              rating = excluded.rating,
+              comment = excluded.comment,
+              created_at = CURRENT_TIMESTAMP`,
+      args: [user.uid, user.username, safariId, rating, comment || null],
+    });
+
+    console.log('>>> Review saved:', user.username, 'rated', rating, 'for safari', safariId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('>>> DB ERROR saving review:', err.message);
     res.status(500).json({ error: err.message });
   }
 });// -------- Record a booking after payment ----------
