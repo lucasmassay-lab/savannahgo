@@ -465,7 +465,128 @@
       .booking-row { flex-direction: column; align-items: flex-start; }
       h2 { font-size: 19px; }
     }
-  </style>
+      /* ---------- Reviews ---------- */
+    .rating-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+    .rating-summary .stars {
+      color: #f5a623;
+      font-size: 18px;
+      letter-spacing: 1px;
+    }
+    .rating-summary .rating-text {
+      color: #666;
+    }
+    .rating-summary.no-reviews {
+      color: #999;
+      font-style: italic;
+    }
+
+    .reviews-section {
+      margin-top: 32px;
+      background: #fff;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    .reviews-section h2 {
+      margin-bottom: 16px;
+    }
+
+    .review-card {
+      padding: 16px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .review-card:last-child { border-bottom: none; }
+    .review-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .review-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #8b5a2b;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .review-user {
+      font-weight: 600;
+      color: #2b2b2b;
+      font-size: 14px;
+    }
+    .review-date {
+      font-size: 12px;
+      color: #999;
+    }
+    .review-stars {
+      margin-left: auto;
+      color: #f5a623;
+      font-size: 16px;
+    }
+    .review-comment {
+      color: #555;
+      font-size: 14px;
+      line-height: 1.6;
+      padding-left: 48px;
+    }
+    .no-reviews-text {
+      color: #999;
+      font-style: italic;
+      font-size: 14px;
+    }
+
+    .review-form {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .review-form h3 {
+      font-size: 16px;
+      margin-bottom: 12px;
+      color: #2b2b2b;
+    }
+    .star-input {
+      font-size: 32px;
+      color: #f5a623;
+      margin-bottom: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .star-input .star {
+      transition: transform 0.1s;
+      display: inline-block;
+    }
+    .star-input .star:hover { transform: scale(1.2); }
+    .review-form textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      margin-bottom: 12px;
+    }
+    .review-form textarea:focus {
+      outline: none;
+      border-color: #8b5a2b;
+    }
+    .review-hint {
+      font-size: 12px;
+      color: #999;
+      margin-top: 8px;
+    }</style>
 </head>
 <body>
   <header>
