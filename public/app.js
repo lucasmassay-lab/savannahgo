@@ -1,4 +1,4 @@
-Pi.init({ version: "2.0", sandbox: true });
+Pi.init({ version: "2.0", sandbox: false });
 
 let accessToken = null;
 let currentUser = null;
