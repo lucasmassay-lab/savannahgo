@@ -42,8 +42,8 @@ function renderSafaris() {
     grid.innerHTML = '<div class="empty-state">No safaris available right now.</div>';
     return;
   }
-  grid.innerHTML = safaris.map(s => `
-    <div class="safari-card">
+    grid.innerHTML = safaris.map(s => `
+    <a href="/safari/${s.id}" class="safari-card">
       <img src="${s.image_url}" alt="${s.name}" loading="lazy" />
       <div class="safari-body">
         <h3>${s.name}</h3>
@@ -53,12 +53,10 @@ function renderSafaris() {
           <div class="safari-price">
             ${s.price_pi} π <small>${s.duration_days} day${s.duration_days > 1 ? 's' : ''}</small>
           </div>
-          <button onclick="bookSafari(${s.id})" ${accessToken ? '' : 'disabled'}>
-            Book
-          </button>
+          <span class="view-btn">View →</span>
         </div>
       </div>
-    </div>
+    </a>
   `).join('');
 }
 
@@ -210,5 +208,112 @@ function renderBookings(bookings) {
   `).join('');
 }
 
+// ---------- Router ----------
+function route() {
+  const path = window.location.pathname;
+
+  if (path === '/' || path === '/index.html') {
+    renderListingsPage();
+  } else if (path.startsWith('/safari/')) {
+    const id = path.split('/')[2];
+    renderDetailPage(id);
+  } else {
+    renderListingsPage();
+  }
+}
+
+async function renderListingsPage() {
+  // Restore listings layout
+  document.getElementById('mainContent').innerHTML = `
+    <section>
+      <h2>🦁 Available Safaris</h2>
+      <div id="safariGrid" class="safari-grid">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+    </section>
+    <section class="bookings-section" id="bookingsSection" style="display:none;">
+      <h2>🎫 My Bookings</h2>
+      <div id="bookingsList"></div>
+    </section>
+  `;
+
+  await loadSafaris();
+
+  if (accessToken) {
+    loadBookings();
+  }
+}
+
+async function renderDetailPage(id) {
+  const container = document.getElementById('mainContent');
+  container.innerHTML = '<div class="skeleton" style="height:400px;"></div>';
+
+  try {
+    const res = await fetch(`/api/safaris/${id}`);
+    if (!res.ok) {
+      container.innerHTML = '<div class="empty-state">Safari not found.</div>';
+      return;
+    }
+    const { safari } = await res.json();
+    renderSafariDetail(safari);
+  } catch (err) {
+    console.error('Failed to load safari', err);
+    container.innerHTML = '<div class="empty-state">Could not load safari.</div>';
+  }
+}
+
+function renderSafariDetail(s) {
+  const container = document.getElementById('mainContent');
+  container.innerHTML = `
+    <a href="/" class="back-link" onclick="event.preventDefault(); navigate('/')">← Back to safaris</a>
+
+    <div class="detail-hero">
+      <img src="${s.image_url}" alt="${s.name}" />
+      <div class="detail-overlay">
+        <h1>${s.name}</h1>
+        <div class="detail-loc">📍 ${s.location}</div>
+      </div>
+    </div>
+
+    <div class="detail-body">
+      <div class="detail-meta">
+        <div class="detail-price">${s.price_pi} π</div>
+        <div class="detail-duration">${s.duration_days} day${s.duration_days > 1 ? 's' : ''}</div>
+      </div>
+
+      <h2>About this safari</h2>
+      <p>${s.description}</p>
+
+      ${s.itinerary ? `<h2>Itinerary</h2><p>${s.itinerary}</p>` : ''}
+      ${s.includes ? `<h2>What's included</h2><p>${s.includes}</p>` : ''}
+      ${s.terms ? `<h2>Terms & conditions</h2><p>${s.terms}</p>` : ''}
+
+      <button class="book-btn-large" onclick="bookSafari(${s.id})" ${accessToken ? '' : 'disabled'}>
+        ${accessToken ? `Book for ${s.price_pi} π` : 'Sign in to book'}
+      </button>
+    </div>
+  `;
+}
+
+// Simple navigation helper
+function navigate(url) {
+  history.pushState({}, '', url);
+  route();
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', route);
+
+// Intercept clicks on cards for smooth navigation
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('a[href^="/"]');
+  if (link && !link.hasAttribute('onclick')) {
+    e.preventDefault();
+    navigate(link.getAttribute('href'));
+  }
+});
+
 // ---------- Init ----------
-loadSafaris();
+route();

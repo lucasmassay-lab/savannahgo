@@ -53,6 +53,31 @@ app.get('/api/safaris', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// -------- Get a single safari with full details --------
+app.get('/api/safaris/:id', async (req, res) => {
+  const safariId = parseInt(req.params.id, 10);
+  if (isNaN(safariId)) {
+    return res.status(400).json({ error: 'Invalid safari id' });
+  }
+
+  try {
+    const result = await db.execute({
+      sql: `SELECT id, name, location, description, price_pi, duration_days,
+                   image_url, itinerary, includes, terms
+            FROM safaris WHERE id = ? AND active = 1`,
+      args: [safariId],
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Safari not found' });
+    }
+
+    res.json({ safari: result.rows[0] });
+  } catch (err) {
+    console.error('>>> DB ERROR loading safari:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // -------- Approve payment + log to DB --------
 app.post('/api/payments/approve', async (req, res) => {
   const { paymentId } = req.body;
@@ -214,5 +239,12 @@ app.get('/api/bookings', async (req, res) => {
   }
 });
 
+// -------- Fallback: serve index.html for any non-API route --------
+app.get('/{*splat}', (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  res.sendFile(__dirname + '/public/index.html');
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
