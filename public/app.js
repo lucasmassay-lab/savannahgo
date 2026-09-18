@@ -4,6 +4,16 @@ let accessToken = null;
 let currentUser = null;
 let safaris = [];
 
+// ---------- Modal ----------
+function showModal(message) {
+  document.getElementById('modalMessage').innerHTML = message;
+  document.getElementById('successModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('successModal').classList.remove('show');
+}
+
 // ---------- Status helper ----------
 function showStatus(message, type = 'info') {
   const el = document.getElementById('status');
@@ -29,7 +39,7 @@ async function loadSafaris() {
 function renderSafaris() {
   const grid = document.getElementById('safariGrid');
   if (safaris.length === 0) {
-    grid.innerHTML = '<p>No safaris available right now.</p>';
+    grid.innerHTML = '<div class="empty-state">No safaris available right now.</div>';
     return;
   }
   grid.innerHTML = safaris.map(s => `
@@ -41,7 +51,7 @@ function renderSafaris() {
         <div class="safari-desc">${s.description}</div>
         <div class="safari-meta">
           <div class="safari-price">
-            ${s.price_pi} π <small>/ ${s.duration_days} day${s.duration_days > 1 ? 's' : ''}</small>
+            ${s.price_pi} π <small>${s.duration_days} day${s.duration_days > 1 ? 's' : ''}</small>
           </div>
           <button onclick="bookSafari(${s.id})" ${accessToken ? '' : 'disabled'}>
             Book
@@ -63,8 +73,11 @@ document.getElementById('login').onclick = async () => {
     currentUser = auth.user;
     await verifyOnServer(accessToken);
 
-    document.getElementById('userDisplay').innerHTML =
-      `Signed in as <span class="user">${currentUser.username}</span>`;
+    const initial = (currentUser.username || '?').charAt(0).toUpperCase();
+    document.getElementById('userInfo').innerHTML = `
+      <div class="avatar">${initial}</div>
+      <span class="user-name">${currentUser.username}</span>
+    `;
     document.getElementById('login').style.display = 'none';
 
     renderSafaris();
@@ -131,7 +144,6 @@ function bookSafari(safariId) {
         });
 
         if (res.ok) {
-          // Record the booking against the safari
           await fetch('/api/bookings', {
             method: 'POST',
             headers: {
@@ -145,6 +157,7 @@ function bookSafari(safariId) {
           });
 
           showStatus(`✅ Booking confirmed: ${safari.name}`, 'success');
+          showModal(`<strong>${safari.name}</strong><br>${safari.price_pi} π paid successfully`);
           loadBookings();
         }
       },
@@ -180,7 +193,8 @@ function renderBookings(bookings) {
   const list = document.getElementById('bookingsList');
 
   if (bookings.length === 0) {
-    section.style.display = 'none';
+    section.style.display = 'block';
+    list.innerHTML = '<div class="empty-state">No bookings yet. Book a safari above!</div>';
     return;
   }
 
@@ -188,7 +202,7 @@ function renderBookings(bookings) {
   list.innerHTML = bookings.map(b => `
     <div class="booking-row">
       <div class="booking-info">
-        <strong>${b.safari_name}</strong><br>
+        <strong>${b.safari_name}</strong>
         <small>${b.price_pi} π • ${new Date(b.created_at).toLocaleDateString()}</small>
       </div>
       <span class="booking-status status-${b.status}">${b.status}</span>
