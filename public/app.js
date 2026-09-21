@@ -688,17 +688,27 @@ function renderAdminPage() {
     return;
   }
 
+  const tab = adminTab || 'safaris';
+
   container.innerHTML =
     '<div class="admin-header">' +
       '<h2>🛠️ Admin Panel</h2>' +
       '<div>' +
-        '<button onclick="showNewSafariForm()">+ New Safari</button>' +
+        (tab === 'safaris' ? '<button onclick="showNewSafariForm()">+ New Safari</button>' : '') +
         '<button class="btn-secondary" onclick="adminLogout()">Log Out</button>' +
       '</div>' +
     '</div>' +
+    '<div class="admin-tabs">' +
+      '<button class="admin-tab ' + (tab === 'safaris' ? 'active' : '') + '" onclick="switchAdminTab(\'safaris\')">Safaris</button>' +
+      '<button class="admin-tab ' + (tab === 'messages' ? 'active' : '') + '" onclick="switchAdminTab(\'messages\')">Messages</button>' +
+    '</div>' +
     '<div id="adminContent">Loading...</div>';
 
-  loadAdminSafaris();
+  if (tab === 'messages') {
+    loadAdminMessages();
+  } else {
+    loadAdminSafaris();
+  }
 }
 
 function adminLogin() {
@@ -728,7 +738,119 @@ function adminLogout() {
   adminKey = null;
   renderAdminPage();
 }
+// ---------- Admin: Messages tab ----------
+let adminTab = 'safaris';
 
+function switchAdminTab(tab) {
+  adminTab = tab;
+  renderAdminPage();
+}
+
+async function loadAdminMessages() {
+  const content = document.getElementById('adminContent');
+  if (!content) return;
+
+  content.innerHTML = 'Loading messages...';
+
+  try {
+    const res = await fetch('/api/admin/messages', {
+      headers: { 'x-admin-key': adminKey },
+    });
+    if (!res.ok) {
+      content.innerHTML = '<p>Error loading messages.</p>';
+      return;
+    }
+    const data = await res.json();
+    renderAdminMessages(data.messages || []);
+  } catch (err) {
+    console.error(err);
+    content.innerHTML = '<p>Error loading messages.</p>';
+  }
+}
+
+function renderAdminMessages(messages) {
+  const content = document.getElementById('adminContent');
+  if (!content) return;
+
+  if (messages.length === 0) {
+    content.innerHTML = '<p class="empty-state">No messages yet. When someone fills the contact form, it will appear here.</p>';
+    return;
+  }
+
+  let rows = '';
+  messages.forEach(function (m) {
+    const date = new Date(m.created_at).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const statusClass = m.status === 'new' ? 'status-new' : (m.status === 'replied' ? 'status-completed' : 'status-pending');
+    const safeName = (m.name || 'Anonymous').replace(/'/g, "\\'");
+
+    rows += '<div class="message-card ' + (m.status === 'new' ? 'message-new' : '') + '">' +
+      '<div class="message-header">' +
+        '<div>' +
+          '<strong>' + (m.name || 'Anonymous') + '</strong>' +
+          '<span class="message-contact">' + (m.contact || 'No contact info') + '</span>' +
+        '</div>' +
+        '<span class="booking-status ' + statusClass + '">' + m.status + '</span>' +
+      '</div>' +
+      (m.safari_name
+        ? '<div class="message-safari">🎯 Interested in: ' + m.safari_name + '</div>'
+        : '') +
+      '<p class="message-text">' + (m.message || '') + '</p>' +
+      '<div class="message-footer">' +
+        '<span class="message-date">' + date + '</span>' +
+        '<div class="message-actions">' +
+          (m.status === 'new' ? '<button onclick="markMessage(' + m.id + ', \'read\')">Mark read</button>' : '') +
+          (m.status !== 'replied' ? '<button onclick="markMessage(' + m.id + ', \'replied\')">Mark replied</button>' : '') +
+          '<button class="btn-danger" onclick="deleteMessage(' + m.id + ', \'' + safeName + '\')">Delete</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  content.innerHTML = rows;
+}
+
+async function markMessage(id, status) {
+  try {
+    const res = await fetch('/api/admin/messages/' + id, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey,
+      },
+      body: JSON.stringify({ status: status }),
+    });
+    if (res.ok) {
+      loadAdminMessages();
+    } else {
+      showStatus('Could not update message', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('Error updating message', 'error');
+  }
+}
+
+async function deleteMessage(id, name) {
+  if (!confirm('Delete message from "' + name + '"? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch('/api/admin/messages/' + id, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': adminKey },
+    });
+    if (res.ok) {
+      showStatus('Message deleted', 'success');
+      loadAdminMessages();
+    } else {
+      showStatus('Could not delete', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('Error deleting', 'error');
+  }
+}
 async function loadAdminSafaris() {
   const content = document.getElementById('adminContent');
   if (!content) return;
