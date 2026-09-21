@@ -633,7 +633,249 @@ function renderBookingDetail(b) {
         '<button class="btn-secondary" onclick="navigate(\'/\')">Back to Listings</button>' +
       '</div>' +
     '</div>';
-}// ---------- Router ----------
+}// ---------- Admin ----------
+let adminKey = null;
+
+function renderAdminPage() {
+  const container = document.getElementById('mainContent');
+
+  if (!adminKey) {
+    container.innerHTML =
+      '<div class="admin-login">' +
+        '<h2>🔐 Admin Login</h2>' +
+        '<p>Enter your admin key to manage safaris.</p>' +
+        '<input type="password" id="adminKeyInput" placeholder="Admin key" />' +
+        '<button onclick="adminLogin()">Sign In</button>' +
+        '<p id="adminError" class="admin-error"></p>' +
+      '</div>';
+    return;
+  }
+
+  container.innerHTML =
+    '<div class="admin-header">' +
+      '<h2>🛠️ Admin Panel</h2>' +
+      '<div>' +
+        '<button onclick="showNewSafariForm()">+ New Safari</button>' +
+        '<button class="btn-secondary" onclick="adminLogout()">Log Out</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="adminContent">Loading...</div>';
+
+  loadAdminSafaris();
+}
+
+function adminLogin() {
+  const input = document.getElementById('adminKeyInput');
+  const key = input ? input.value.trim() : '';
+  if (!key) return;
+
+  adminKey = key;
+  fetch('/api/admin/safaris', { headers: { 'x-admin-key': adminKey } })
+    .then(function (r) {
+      if (r.ok) {
+        renderAdminPage();
+      } else {
+        adminKey = null;
+        const err = document.getElementById('adminError');
+        if (err) err.textContent = 'Invalid admin key. Try again.';
+      }
+    })
+    .catch(function () {
+      adminKey = null;
+      const err = document.getElementById('adminError');
+      if (err) err.textContent = 'Could not connect. Try again.';
+    });
+}
+
+function adminLogout() {
+  adminKey = null;
+  renderAdminPage();
+}
+
+async function loadAdminSafaris() {
+  const content = document.getElementById('adminContent');
+  if (!content) return;
+
+  try {
+    const res = await fetch('/api/admin/safaris', {
+      headers: { 'x-admin-key': adminKey },
+    });
+    if (!res.ok) {
+      content.innerHTML = '<p>Error loading safaris.</p>';
+      return;
+    }
+    const data = await res.json();
+    renderAdminList(data.safaris || []);
+  } catch (err) {
+    console.error(err);
+    content.innerHTML = '<p>Error loading safaris.</p>';
+  }
+}
+
+function renderAdminList(safaris) {
+  const content = document.getElementById('adminContent');
+  if (!content) return;
+
+  if (safaris.length === 0) {
+    content.innerHTML = '<p class="empty-state">No safaris yet. Click "+ New Safari" to add one.</p>';
+    return;
+  }
+
+  let rows = '';
+  safaris.forEach(function (s) {
+    const safeName = s.name.replace(/'/g, "\\'");
+    rows += '<tr>' +
+      '<td>' + s.id + '</td>' +
+      '<td>' + s.name + '</td>' +
+      '<td>' + s.price_pi + ' π</td>' +
+      '<td>' + (s.active ? '✅' : '❌') + '</td>' +
+      '<td>' +
+        '<button onclick="editSafari(' + s.id + ')">Edit</button>' +
+        '<button class="btn-danger" onclick="deleteSafari(' + s.id + ', \'' + safeName + '\')">Delete</button>' +
+      '</td>' +
+    '</tr>';
+  });
+
+  content.innerHTML =
+    '<table class="admin-table">' +
+      '<thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Active</th><th>Actions</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>';
+}
+function showNewSafariForm() {
+  showSafariForm(null);
+}
+
+async function editSafari(id) {
+  try {
+    const res = await fetch('/api/admin/safaris', {
+      headers: { 'x-admin-key': adminKey },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const safari = (data.safaris || []).find(function (s) { return s.id === id; });
+    if (!safari) {
+      showStatus('Safari not found', 'error');
+      return;
+    }
+    showSafariForm(safari);
+  } catch (err) {
+    console.error(err);
+    showStatus('Error loading safari', 'error');
+  }
+}
+
+function showSafariForm(safari) {
+  const isEdit = !!safari;
+  const s = safari || {
+    name: '', location: '', description: '', price_pi: '',
+    duration_days: 1, image_url: '', itinerary: '',
+    includes: '', terms: '', active: 1,
+  };
+
+  const content = document.getElementById('adminContent');
+  content.innerHTML =
+    '<div class="admin-form">' +
+      '<h3>' + (isEdit ? 'Edit Safari #' + s.id : 'New Safari') + '</h3>' +
+      '<label>Name *<input type="text" id="f_name" value="' + esc(s.name) + '" /></label>' +
+      '<label>Location<input type="text" id="f_location" value="' + esc(s.location) + '" /></label>' +
+      '<label>Description<textarea id="f_description" rows="2">' + esc(s.description) + '</textarea></label>' +
+      '<label>Price in Pi *<input type="number" step="0.01" id="f_price_pi" value="' + s.price_pi + '" /></label>' +
+      '<label>Duration (days)<input type="number" id="f_duration_days" value="' + s.duration_days + '" /></label>' +
+      '<label>Image URL<input type="text" id="f_image_url" value="' + esc(s.image_url) + '" /></label>' +
+      '<label>Itinerary<textarea id="f_itinerary" rows="3">' + esc(s.itinerary) + '</textarea></label>' +
+      '<label>Includes<textarea id="f_includes" rows="2">' + esc(s.includes) + '</textarea></label>' +
+      '<label>Terms<textarea id="f_terms" rows="2">' + esc(s.terms) + '</textarea></label>' +
+      '<label class="checkbox-label"><input type="checkbox" id="f_active"' + (s.active ? ' checked' : '') + ' /> Active (visible to users)</label>' +
+      '<div class="admin-form-actions">' +
+        '<button onclick="saveSafari(' + (isEdit ? s.id : 'null') + ')">Save</button>' +
+        '<button class="btn-secondary" onclick="cancelSafariForm()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+}
+
+function cancelSafariForm() {
+  loadAdminSafaris();
+}
+
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function saveSafari(id) {
+  const body = {
+    name: document.getElementById('f_name').value.trim(),
+    location: document.getElementById('f_location').value.trim(),
+    description: document.getElementById('f_description').value.trim(),
+    price_pi: parseFloat(document.getElementById('f_price_pi').value) || 0,
+    duration_days: parseInt(document.getElementById('f_duration_days').value, 10) || 1,
+    image_url: document.getElementById('f_image_url').value.trim(),
+    itinerary: document.getElementById('f_itinerary').value.trim(),
+    includes: document.getElementById('f_includes').value.trim(),
+    terms: document.getElementById('f_terms').value.trim(),
+    active: document.getElementById('f_active').checked ? 1 : 0,
+  };
+
+  if (!body.name) {
+    showStatus('Name is required', 'error');
+    return;
+  }
+  if (!body.price_pi) {
+    showStatus('Price is required', 'error');
+    return;
+  }
+
+  try {
+    const url = id ? '/api/admin/safaris/' + id : '/api/admin/safaris';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+      showStatus(id ? 'Safari updated' : 'Safari created', 'success');
+      loadAdminSafaris();
+    } else {
+      const err = await res.json();
+      showStatus(err.error || 'Could not save', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('Error saving safari', 'error');
+  }
+}
+
+async function deleteSafari(id, name) {
+  if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch('/api/admin/safaris/' + id, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': adminKey },
+    });
+    if (res.ok) {
+      showStatus('Safari deleted', 'success');
+      loadAdminSafaris();
+    } else {
+      showStatus('Could not delete', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('Error deleting', 'error');
+  }
+}
+
+// ---------- Router ----------
 function route() {
   const path = window.location.pathname;
 
@@ -642,6 +884,9 @@ function route() {
   } else if (path.indexOf('/safari/') === 0) {
     const id = path.split('/')[2];
     renderDetailPage(id);
+
+      } else if (path === '/admin') {
+    renderAdminPage();
   } else if (path.indexOf('/booking/') === 0) {
     const id = path.split('/')[2];
     renderBookingDetailPage(id);

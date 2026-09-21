@@ -319,6 +319,105 @@ app.get('/api/bookings', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// -------- Admin: check key ----------
+function requireAdmin(req, res, next) {
+  const key = req.headers['x-admin-key'];
+  if (!key || key !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+// -------- Admin: list all safaris ----------
+app.get('/api/admin/safaris', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.execute('SELECT * FROM safaris ORDER BY id DESC');
+    res.json({ safaris: result.rows });
+  } catch (err) {
+    console.error('>>> DB ERROR admin list:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- Admin: create a safari ----------
+app.post('/api/admin/safaris', requireAdmin, async (req, res) => {
+  const {
+    name, location, description, price_pi, duration_days,
+    image_url, itinerary, includes, terms, active
+  } = req.body;
+
+  if (!name || !price_pi) {
+    return res.status(400).json({ error: 'Name and price required' });
+  }
+
+  try {
+    const result = await db.execute({
+      sql: `INSERT INTO safaris
+              (name, location, description, price_pi, duration_days,
+               image_url, itinerary, includes, terms, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        name, location || null, description || null, price_pi,
+        duration_days || 1, image_url || null, itinerary || null,
+        includes || null, terms || null, active === 0 ? 0 : 1
+      ],
+    });
+    console.log('>>> Admin created safari:', name);
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (err) {
+    console.error('>>> DB ERROR admin create:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- Admin: update a safari ----------
+app.put('/api/admin/safaris/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+
+  const {
+    name, location, description, price_pi, duration_days,
+    image_url, itinerary, includes, terms, active
+  } = req.body;
+
+  try {
+    await db.execute({
+      sql: `UPDATE safaris SET
+              name = ?, location = ?, description = ?, price_pi = ?,
+              duration_days = ?, image_url = ?, itinerary = ?,
+              includes = ?, terms = ?, active = ?
+            WHERE id = ?`,
+      args: [
+        name, location || null, description || null, price_pi,
+        duration_days || 1, image_url || null, itinerary || null,
+        includes || null, terms || null, active === 0 ? 0 : 1, id
+      ],
+    });
+    console.log('>>> Admin updated safari:', id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('>>> DB ERROR admin update:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- Admin: delete a safari ----------
+app.delete('/api/admin/safaris/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+
+  try {
+    await db.execute({
+      sql: 'DELETE FROM safaris WHERE id = ?',
+      args: [id],
+    });
+    console.log('>>> Admin deleted safari:', id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('>>> DB ERROR admin delete:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // -------- Fallback: serve index.html for any non-API route --------
 app.get('/{*splat}', (req, res, next) => {
