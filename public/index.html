@@ -696,13 +696,95 @@
     .review-hint {
       font-size: 12px;
       color: #999;
-      margin-top: 8px;
+      margin-top: 8px;     /* ---------- Header nav ---------- */
+    .header-nav {
+      margin-top: 14px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+    .header-nav a {
+      color: rgba(255,255,255,0.9);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      transition: background 0.2s;
+    }
+    .header-nav a:hover {
+      background: rgba(255,255,255,0.15);
+    }
+
+    /* ---------- Contact page ---------- */
+    .contact-page {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .contact-page h2 {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .contact-intro {
+      text-align: center;
+      color: #666;
+      font-size: 15px;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    .contact-form {
+      background: #fff;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    .contact-form label {
+      display: block;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: #555;
+      font-weight: 600;
+    }
+    .contact-form input,
+    .contact-form select,
+    .contact-form textarea {
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 400;
+      color: #2b2b2b;
+      background: #fff;
+    }
+    .contact-form input:focus,
+    .contact-form select:focus,
+    .contact-form textarea:focus {
+      outline: none;
+      border-color: #8b5a2b;
+    }
+    .contact-form textarea { resize: vertical; }
+    .contact-form button { width: 100%; margin-top: 8px; }
+    .contact-result {
+      margin-top: 14px;
+      font-size: 14px;
+      min-height: 20px;
+      text-align: center;
+    }
+    .contact-result.success { color: #155724; font-weight: 600; }
+    .contact-result.error { color: #721c24; }
     }</style>
 </head>
 <body>
   <header>
     <h1>🌍 SavannahGo</h1>
     <p>Discover, book, and pay for African safaris — all with Pi</p>
+    <nav class="header-nav">
+      <a href="/">Safaris</a>
+      <a href="/contact">Contact</a>
+    </nav>
   </header>
 
     <div class="container">

@@ -911,6 +911,103 @@ async function deleteSafari(id, name) {
     showStatus('Error deleting', 'error');
   }
 }
+// ---------- Contact page ----------
+function renderContactPage() {
+  const container = document.getElementById('mainContent');
+
+  container.innerHTML =
+    '<div class="contact-page">' +
+      '<h2>📬 Contact SavannahGo</h2>' +
+      '<p class="contact-intro">Have a question about a safari, a custom booking, or just want to say hi? Send us a message and we\'ll get back to you.</p>' +
+      '<div class="contact-form">' +
+        '<label>Your name' +
+          '<input type="text" id="c_name" placeholder="e.g. Saige" />' +
+        '</label>' +
+        '<label>How can we reach you?' +
+          '<input type="text" id="c_contact" placeholder="Email, WhatsApp, or Pi username" />' +
+        '</label>' +
+        '<label>Which safari are you interested in?' +
+          '<select id="c_safari"><option value="">General inquiry</option></select>' +
+        '</label>' +
+        '<label>Message *' +
+          '<textarea id="c_message" rows="5" placeholder="Tell us what you\'d like to know..."></textarea>' +
+        '</label>' +
+        '<button onclick="submitContact()">Send Message</button>' +
+        '<p id="contactResult" class="contact-result"></p>' +
+      '</div>' +
+    '</div>';
+
+  populateContactSafariDropdown();
+}
+
+async function populateContactSafariDropdown() {
+  const select = document.getElementById('c_safari');
+  if (!select) return;
+
+  try {
+    const res = await fetch('/api/safaris');
+    const data = await res.json();
+    const safaris = data.safaris || [];
+
+    safaris.forEach(function (s) {
+      const option = document.createElement('option');
+      option.value = s.id;
+      option.textContent = s.name + ' (' + s.price_pi + ' π)';
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error('Failed to load safaris for contact form', err);
+  }
+}
+
+async function submitContact() {
+  const name = (document.getElementById('c_name') || {}).value || '';
+  const contact = (document.getElementById('c_contact') || {}).value || '';
+  const safariId = (document.getElementById('c_safari') || {}).value || '';
+  const message = (document.getElementById('c_message') || {}).value || '';
+  const result = document.getElementById('contactResult');
+
+  if (!message.trim() || message.trim().length < 3) {
+    result.textContent = 'Please write a message (at least 3 characters).';
+    result.className = 'contact-result error';
+    return;
+  }
+
+  const safariSelect = document.getElementById('c_safari');
+  const safariName = safariId && safariSelect
+    ? safariSelect.options[safariSelect.selectedIndex].textContent
+    : '';
+
+  try {
+    const res = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(),
+        contact: contact.trim(),
+        safari_id: safariId ? parseInt(safariId, 10) : null,
+        safari_name: safariName,
+        message: message.trim(),
+      }),
+    });
+
+    if (res.ok) {
+      result.textContent = '✅ Message sent! We\'ll be in touch soon.';
+      result.className = 'contact-result success';
+      document.getElementById('c_name').value = '';
+      document.getElementById('c_contact').value = '';
+      document.getElementById('c_safari').value = '';
+      document.getElementById('c_message').value = '';
+    } else {
+      result.textContent = 'Could not send. Please try again.';
+      result.className = 'contact-result error';
+    }
+  } catch (err) {
+    console.error('Failed to send contact message', err);
+    result.textContent = 'Network error. Please try again.';
+    result.className = 'contact-result error';
+  }
+}
 
 // ---------- Router ----------
 function route() {
@@ -918,19 +1015,21 @@ function route() {
 
   if (path === '/' || path === '/index.html') {
     renderListingsPage();
+  } else if (path === '/contact') {
+    renderContactPage();
+  } else if (path === '/admin') {
+    renderAdminPage();
   } else if (path.indexOf('/safari/') === 0) {
     const id = path.split('/')[2];
     renderDetailPage(id);
-
-      } else if (path === '/admin') {
-    renderAdminPage();
   } else if (path.indexOf('/booking/') === 0) {
     const id = path.split('/')[2];
     renderBookingDetailPage(id);
-  } else {
+  }  else {
     renderListingsPage();
   }
 }
+
 console.log('APP LOADED. Path =', window.location.pathname);
 
 
