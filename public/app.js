@@ -198,6 +198,44 @@ function onIncompletePayment(payment) {
 }
 
 // ---------- Booking ----------
+async function handleBookClick(safariId) {
+  // If already signed in, go straight to booking
+  if (accessToken) {
+    bookSafari(safariId);
+    return;
+  }
+
+  // Otherwise, trigger sign-in first
+  showStatus('Please sign in to continue', 'info');
+
+  try {
+    const auth = await window.Pi.authenticate(
+      ['username', 'payments'],
+      onIncompletePayment
+    );
+    accessToken = auth.accessToken;
+    currentUser = auth.user;
+    await verifyOnServer(accessToken);
+
+    const initial = (currentUser.username || '?').charAt(0).toUpperCase();
+    document.getElementById('userInfo').innerHTML =
+      '<div class="avatar">' + initial + '</div>' +
+      '<span class="user-name">' + currentUser.username + '</span>';
+    document.getElementById('login').style.display = 'none';
+
+    showStatus('Welcome, ' + currentUser.username + '!', 'success');
+
+    // Re-render the current page so the button updates
+    route();
+
+    // Small delay so the button state updates before the payment dialog opens
+    setTimeout(function () { bookSafari(safariId); }, 300);
+  } catch (err) {
+    console.error('Sign-in failed', err);
+    showStatus('Sign-in failed. Please try again.', 'error');
+  }
+}
+
 function bookSafari(safariId) {
   const safari = safaris.find(function (s) { return s.id === safariId; });
   if (!safari) return;
@@ -286,13 +324,13 @@ function renderBookings(bookings) {
 
   section.style.display = 'block';
   list.innerHTML = bookings.map(function (b) {
-    return '<div class="booking-row">' +
+      return '<a href="/booking/' + b.id + '" class="booking-row">' +
       '<div class="booking-info">' +
         '<strong>' + b.safari_name + '</strong>' +
         '<small>' + b.price_pi + ' π • ' + new Date(b.created_at).toLocaleDateString() + '</small>' +
       '</div>' +
       '<span class="booking-status status-' + b.status + '">' + b.status + '</span>' +
-    '</div>';
+    '</a>';
   }).join('');
 }
 
@@ -354,8 +392,8 @@ function renderSafariDetail(s, rating) {
       (s.itinerary ? '<h2>Itinerary</h2><p>' + s.itinerary + '</p>' : '') +
       (s.includes ? '<h2>What\'s included</h2><p>' + s.includes + '</p>' : '') +
       (s.terms ? '<h2>Terms &amp; conditions</h2><p>' + s.terms + '</p>' : '') +
-      '<button class="book-btn-large" onclick="bookSafari(' + s.id + ')"' + (accessToken ? '' : ' disabled') + '>' +
-        (accessToken ? 'Book for ' + s.price_pi + ' π' : 'Sign in to book') +
+      '<button class="book-btn-large" onclick="handleBookClick(' + s.id + ')">' +
+        (accessToken ? 'Book for ' + s.price_pi + ' π' : '🔒 Sign in to book') +
       '</button>' +
     '</div>' +
     '<div class="reviews-section" id="reviewsSection">' +
@@ -512,7 +550,90 @@ async function renderListingsPage() {
   }
 }
 
-// ---------- Router ----------
+// ---------- Booking detail page ----------
+async function renderBookingDetailPage(bookingId) {
+  const container = document.getElementById('mainContent');
+  container.innerHTML = '<div class="skeleton" style="height:400px;"></div>';
+
+  if (!accessToken) {
+    container.innerHTML = '<div class="empty-state">Please sign in to view this booking.</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/bookings/' + bookingId, {
+      headers: { Authorization: 'Bearer ' + accessToken },
+    });
+
+    if (!res.ok) {
+      container.innerHTML = '<div class="empty-state">Booking not found.</div>';
+      return;
+    }
+
+    const data = await res.json();
+    renderBookingDetail(data.booking);
+  } catch (err) {
+    console.error('Failed to load booking', err);
+    container.innerHTML = '<div class="empty-state">Could not load booking.</div>';
+  }
+}
+
+function renderBookingDetail(b) {
+  const container = document.getElementById('mainContent');
+  const days = b.duration_days
+    ? b.duration_days + ' day' + (b.duration_days > 1 ? 's' : '')
+    : '—';
+  const txid = b.txid || 'Not available';
+  const explorerUrl = b.txid
+    ? 'https://blockexplorer.minepi.com/transactions/' + b.txid
+    : null;
+
+  container.innerHTML =
+    '<a href="/" class="back-link">← Back to safaris</a>' +
+    '<div class="booking-detail">' +
+      '<div class="booking-detail-header">' +
+        '<div class="booking-status-badge status-' + b.status + '">' + b.status + '</div>' +
+        '<h1>' + b.safari_name + '</h1>' +
+        '<p class="booking-detail-loc">📍 ' + (b.location || 'Location unavailable') + '</p>' +
+      '</div>' +
+      (b.image_url
+        ? '<img class="booking-detail-image" src="' + b.image_url + '" alt="' + b.safari_name + '" />'
+        : '') +
+      '<div class="booking-detail-grid">' +
+        '<div class="booking-detail-item">' +
+          '<div class="detail-label">Amount paid</div>' +
+          '<div class="detail-value">' + b.price_pi + ' π</div>' +
+        '</div>' +
+        '<div class="booking-detail-item">' +
+          '<div class="detail-label">Duration</div>' +
+          '<div class="detail-value">' + days + '</div>' +
+        '</div>' +
+        '<div class="booking-detail-item">' +
+          '<div class="detail-label">Booked on</div>' +
+          '<div class="detail-value">' + new Date(b.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '</div>' +
+        '</div>' +
+        '<div class="booking-detail-item">' +
+          '<div class="detail-label">Booking ID</div>' +
+          '<div class="detail-value detail-mono">#' + b.id + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="booking-detail-section">' +
+        '<div class="detail-label">Payment ID</div>' +
+        '<div class="detail-value detail-mono detail-break">' + b.payment_id + '</div>' +
+      '</div>' +
+      '<div class="booking-detail-section">' +
+        '<div class="detail-label">Blockchain transaction (TXID)</div>' +
+        '<div class="detail-value detail-mono detail-break">' + txid + '</div>' +
+        (explorerUrl
+          ? '<a class="explorer-link" href="' + explorerUrl + '" target="_blank" rel="noopener">View on Pi Blockchain Explorer →</a>'
+          : '<p class="detail-hint">Transaction is still processing or unavailable.</p>') +
+      '</div>' +
+      '<div class="booking-detail-actions">' +
+        '<button onclick="navigate(\'/safari/' + b.safari_id + '\')">View Safari</button>' +
+        '<button class="btn-secondary" onclick="navigate(\'/\')">Back to Listings</button>' +
+      '</div>' +
+    '</div>';
+}// ---------- Router ----------
 function route() {
   const path = window.location.pathname;
 
@@ -521,11 +642,17 @@ function route() {
   } else if (path.indexOf('/safari/') === 0) {
     const id = path.split('/')[2];
     renderDetailPage(id);
+  } else if (path.indexOf('/booking/') === 0) {
+    const id = path.split('/')[2];
+    renderBookingDetailPage(id);
   } else {
     renderListingsPage();
   }
 }
+console.log('APP LOADED. Path =', window.location.pathname);
 
+
+// ---------- Navigation ----------
 function navigate(url) {
   history.pushState({}, '', url);
   route();
@@ -534,7 +661,7 @@ function navigate(url) {
 window.addEventListener('popstate', route);
 
 document.addEventListener('click', function (e) {
-  const link = e.target.closest ? e.target.closest('a[href^="/"]') : null;
+  var link = e.target.closest ? e.target.closest('a[href^="/"]') : null;
   if (link && !link.hasAttribute('onclick')) {
     e.preventDefault();
     navigate(link.getAttribute('href'));

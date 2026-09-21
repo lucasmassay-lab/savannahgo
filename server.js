@@ -329,3 +329,51 @@ app.get('/{*splat}', (req, res, next) => {
 });
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+// -------- Get a single booking by id ----------
+app.get('/api/bookings/:id', async (req, res) => {
+  const bookingId = parseInt(req.params.id, 10);
+  const accessToken = req.headers.authorization?.replace('Bearer ', '');
+
+  if (isNaN(bookingId)) {
+    return res.status(400).json({ error: 'Invalid booking id' });
+  }
+  if (!accessToken) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const piRes = await fetch(`${PI_API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!piRes.ok) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await piRes.json();
+
+    const result = await db.execute({
+      sql: `SELECT b.id, b.payment_id, b.uid, b.safari_id, b.safari_name,
+                   b.price_pi, b.status, b.created_at,
+                   s.location, s.duration_days, s.image_url
+            FROM bookings b
+            LEFT JOIN safaris s ON s.id = b.safari_id
+            WHERE b.id = ? AND b.uid = ?`,
+      args: [bookingId, user.uid],
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    // Also fetch the txid from payments table
+    const paymentResult = await db.execute({
+      sql: 'SELECT txid FROM payments WHERE payment_id = ?',
+      args: [result.rows[0].payment_id],
+    });
+
+    const booking = result.rows[0];
+    booking.txid = paymentResult.rows.length > 0 ? paymentResult.rows[0].txid : null;
+
+    res.json({ booking });
+  } catch (err) {
+    console.error('>>> DB ERROR loading booking:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
