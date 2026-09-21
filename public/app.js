@@ -361,7 +361,39 @@ function renderStars(rating) {
   for (let i = full; i < 5; i++) stars += '☆';
   return stars;
 }
+// ---------- Share ----------
+async function shareSafari(safariId, safariName, pricePi) {
+  const url = window.location.origin + '/safari/' + safariId;
+  const text = 'Check out "' + safariName + '" (' + pricePi + ' π) on SavannahGo — African safaris on Pi!';
 
+  // Try native Web Share API first (works great on mobile)
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: safariName,
+        text: text,
+        url: url,
+      });
+      return;
+    } catch (err) {
+      // User cancelled or share failed — fall through to fallback
+      if (err.name === 'AbortError') return;
+      console.warn('Web Share failed, using fallback', err);
+    }
+  }
+
+  // Fallback 1: WhatsApp
+  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url);
+
+  // Fallback 2: Copy to clipboard
+  try {
+    await navigator.clipboard.writeText(text + ' ' + url);
+    showStatus('Link copied to clipboard! Paste it to share.', 'success');
+  } catch (err) {
+    // Fallback 3: Open WhatsApp directly
+    window.open(whatsappUrl, '_blank');
+  }
+}
 function renderSafariDetail(s, rating) {
   const container = document.getElementById('mainContent');
   const avg = rating && rating.average ? rating.average : null;
@@ -393,8 +425,13 @@ function renderSafariDetail(s, rating) {
       (s.includes ? '<h2>What\'s included</h2><p>' + s.includes + '</p>' : '') +
       (s.terms ? '<h2>Terms &amp; conditions</h2><p>' + s.terms + '</p>' : '') +
       '<button class="book-btn-large" onclick="handleBookClick(' + s.id + ')">' +
+        (accessToken ? 'Book for ' + s.price_pi + ' π' : '🔒 Sign in to book') + 
+      '<button class="share-btn" onclick="shareSafari(' + s.id + ', \'' + s.name.replace(/'/g, "\\'") + '\', ' + s.price_pi + ')">📤 Share this safari</button>' +
+      '</button>'
+      '<button class="share-btn" onclick="shareSafari(' + s.id + ', \'' + s.name.replace(/'/g, "\\'") + '\', ' + s.price_pi + ')">📤 Share this safari</button>' + +       '<button class="book-btn-large" onclick="handleBookClick(' + s.id + ')">' +
         (accessToken ? 'Book for ' + s.price_pi + ' π' : '🔒 Sign in to book') +
       '</button>' +
+    '</div>' +
     '</div>' +
     '<div class="reviews-section" id="reviewsSection">' +
       '<h2>⭐ Reviews</h2>' +
