@@ -1130,6 +1130,118 @@ async function submitContact() {
     result.className = 'contact-result error';
   }
 }
+// ---------- Privacy Policy ----------
+function renderPrivacyPage() {
+  const container = document.getElementById('mainContent');
+  container.innerHTML =
+    '<div class="legal-page">' +
+      '<a href="/" class="back-link">← Back to safaris</a>' +
+      '<h1>Privacy Policy</h1>' +
+      '<p class="legal-updated">Last updated: September 22, 2026</p>' +
+
+      '<h2>1. Introduction</h2>' +
+      '<p>SavannahGo ("we", "our", or "the App") operates as a Pi Network application for discovering, booking, and paying for safaris across Africa. This Privacy Policy explains how we collect, use, and protect your information when you use our service.</p>' +
+
+      '<h2>2. Information We Collect</h2>' +
+      '<p>When you use SavannahGo, we may collect:</p>' +
+      '<ul>' +
+        '<li><strong>Pi Network identity:</strong> Your Pi username and unique user ID (UID), provided through the Pi SDK during authentication.</li>' +
+        '<li><strong>Booking information:</strong> Safari selections, payment amounts, payment IDs, and blockchain transaction IDs.</li>' +
+        '<li><strong>Contact information:</strong> If you submit a contact form, we collect the name, contact method, and message you provide.</li>' +
+        '<li><strong>Review content:</strong> Star ratings and comments you submit about safaris.</li>' +
+      '</ul>' +
+
+      '<h2>3. How We Use Your Information</h2>' +
+      '<p>We use collected information solely to:</p>' +
+      '<ul>' +
+        '<li>Authenticate you and maintain your session</li>' +
+        '<li>Process safari bookings and Pi payments</li>' +
+        '<li>Show your booking history and reviews</li>' +
+        '<li>Respond to contact inquiries</li>' +
+        '<li>Improve the App and its features</li>' +
+      '</ul>' +
+
+      '<h2>4. Information We Do NOT Collect</h2>' +
+      '<p>We do not collect or store:</p>' +
+      '<ul>' +
+        '<li>Your Pi Network passphrase or private key</li>' +
+        '<li>Your wallet balance or private wallet addresses</li>' +
+        '<li>Any passwords (authentication is handled entirely by the Pi SDK)</li>' +
+        '<li>Your precise location or device identifiers</li>' +
+      '</ul>' +
+
+      '<h2>5. Data Storage</h2>' +
+      '<p>Your data is stored securely using Turso (a cloud-hosted database). We retain your information for as long as your account is active or as needed to provide the service.</p>' +
+
+      '<h2>6. Data Sharing</h2>' +
+      '<p>We do not sell, rent, or share your personal information with third parties. Payment processing is handled entirely through the Pi Network blockchain and Platform APIs.</p>' +
+
+      '<h2>7. Your Rights</h2>' +
+      '<p>You may request deletion of your data by contacting us through the App\'s contact form. We will respond within a reasonable timeframe.</p>' +
+
+      '<h2>8. Children\'s Privacy</h2>' +
+      '<p>SavannahGo is not intended for users under the age required by Pi Network\'s terms of service. We do not knowingly collect information from children.</p>' +
+
+      '<h2>9. Changes to This Policy</h2>' +
+      '<p>We may update this Privacy Policy from time to time. Continued use of the App after changes constitutes acceptance of the updated policy.</p>' +
+
+      '<h2>10. Contact Us</h2>' +
+      '<p>For questions about this Privacy Policy, please use the <a href="/contact">Contact page</a>.</p>' +
+    '</div>';
+}
+
+// ---------- Terms of Service ----------
+function renderTermsPage() {
+  const container = document.getElementById('mainContent');
+  container.innerHTML =
+    '<div class="legal-page">' +
+      '<a href="/" class="back-link">← Back to safaris</a>' +
+      '<h1>Terms of Service</h1>' +
+      '<p class="legal-updated">Last updated: September 22, 2026</p>' +
+
+      '<h2>1. Acceptance of Terms</h2>' +
+      '<p>By using SavannahGo ("the App"), you agree to these Terms of Service. If you do not agree, please do not use the App.</p>' +
+
+      '<h2>2. About SavannahGo</h2>' +
+      '<p>SavannahGo is a Pi Network application that allows Pioneers to discover, book, and pay for safaris across Africa using Pi cryptocurrency.</p>' +
+
+      '<h2>3. Eligibility</h2>' +
+      '<p>You must have a valid Pi Network account and be of legal age in your jurisdiction to use this App.</p>' +
+
+      '<h2>4. Payments</h2>' +
+      '<p>All transactions are conducted exclusively in Pi (π). Payment amounts are displayed in Pi before you confirm any transaction. Once a payment is completed on the Pi blockchain, it is final and cannot be reversed.</p>' +
+
+      '<h2>5. Bookings</h2>' +
+      '<p>When you book a safari, you are expressing intent to purchase. Actual safari delivery is coordinated between you and the tour operator. SavannahGo acts as a marketplace and payment platform.</p>' +
+
+      '<h2>6. Refunds</h2>' +
+      '<p>Refunds are handled on a case-by-case basis according to the terms of each specific safari. Please review the "Terms &amp; conditions" section on each safari listing before booking.</p>' +
+
+      '<h2>7. User Conduct</h2>' +
+      '<p>You agree not to:</p>' +
+      '<ul>' +
+        '<li>Submit false, misleading, or fraudulent information</li>' +
+        '<li>Attempt to manipulate payments or pricing</li>' +
+        '<li>Post abusive or inappropriate reviews</li>' +
+        '<li>Use the App for any illegal purpose</li>' +
+      '</ul>' +
+
+      '<h2>8. Reviews</h2>' +
+      '<p>Reviews may only be submitted by users who have completed a booking for the specific safari. We reserve the right to remove reviews that violate these terms.</p>' +
+
+      '<h2>9. Limitation of Liability</h2>' +
+      '<p>SavannahGo is provided "as is". We are not liable for issues arising from third-party tour operators, Pi Network outages, or blockchain-related delays.</p>' +
+
+      '<h2>10. Intellectual Property</h2>' +
+      '<p>All content, branding, and code of SavannahGo are protected. You may not copy or redistribute without permission.</p>' +
+
+      '<h2>11. Changes to Terms</h2>' +
+      '<p>We may modify these Terms at any time. Continued use of the App constitutes acceptance of any updates.</p>' +
+
+      '<h2>12. Contact</h2>' +
+      '<p>For questions, please use the <a href="/contact">Contact page</a>.</p>' +
+    '</div>';
+}
 
 // ---------- Router ----------
 function route() {
@@ -1137,7 +1249,10 @@ function route() {
 
   if (path === '/' || path === '/index.html') {
     renderListingsPage();
-  } else if (path === '/contact') {
+  } else if (path === '/contact') {  } else if (path === '/privacy') {
+    renderPrivacyPage();
+  } else if (path === '/terms') {
+    renderTermsPage();
     renderContactPage();
   } else if (path === '/admin') {
     renderAdminPage();
