@@ -5,6 +5,9 @@ let currentUser = null;
 let safaris = [];
 let allSafaris = [];
 let filteredSafaris = [];
+let currentRating = 0;
+let adminKey = null;
+let adminTab = 'safaris';
 
 // ---------- Modal ----------
 function showModal(message) {
@@ -25,7 +28,7 @@ function showStatus(message, type) {
   setTimeout(function () { el.className = ''; }, 5000);
 }
 
-// ---------- Safari listing ----------
+// ---------- Load safaris ----------
 async function loadSafaris() {
   try {
     const res = await fetch('/api/safaris');
@@ -199,13 +202,11 @@ function onIncompletePayment(payment) {
 
 // ---------- Booking ----------
 async function handleBookClick(safariId) {
-  // If already signed in, go straight to booking
   if (accessToken) {
     bookSafari(safariId);
     return;
   }
 
-  // Otherwise, trigger sign-in first
   showStatus('Please sign in to continue', 'info');
 
   try {
@@ -224,11 +225,7 @@ async function handleBookClick(safariId) {
     document.getElementById('login').style.display = 'none';
 
     showStatus('Welcome, ' + currentUser.username + '!', 'success');
-
-    // Re-render the current page so the button updates
     route();
-
-    // Small delay so the button state updates before the payment dialog opens
     setTimeout(function () { bookSafari(safariId); }, 300);
   } catch (err) {
     console.error('Sign-in failed', err);
@@ -324,7 +321,7 @@ function renderBookings(bookings) {
 
   section.style.display = 'block';
   list.innerHTML = bookings.map(function (b) {
-      return '<a href="/booking/' + b.id + '" class="booking-row">' +
+    return '<a href="/booking/' + b.id + '" class="booking-row">' +
       '<div class="booking-info">' +
         '<strong>' + b.safari_name + '</strong>' +
         '<small>' + b.price_pi + ' π • ' + new Date(b.created_at).toLocaleDateString() + '</small>' +
@@ -334,7 +331,7 @@ function renderBookings(bookings) {
   }).join('');
 }
 
-// ---------- Detail page ----------
+// ---------- Safari detail ----------
 async function renderDetailPage(id) {
   const container = document.getElementById('mainContent');
   container.innerHTML = '<div class="skeleton" style="height:400px;"></div>';
@@ -361,39 +358,29 @@ function renderStars(rating) {
   for (let i = full; i < 5; i++) stars += '☆';
   return stars;
 }
-// ---------- Share ----------
+
 async function shareSafari(safariId, safariName, pricePi) {
   const url = window.location.origin + '/safari/' + safariId;
   const text = 'Check out "' + safariName + '" (' + pricePi + ' π) on SavannahGo — African safaris on Pi!';
 
-  // Try native Web Share API first (works great on mobile)
   if (navigator.share) {
     try {
-      await navigator.share({
-        title: safariName,
-        text: text,
-        url: url,
-      });
+      await navigator.share({ title: safariName, text: text, url: url });
       return;
     } catch (err) {
-      // User cancelled or share failed — fall through to fallback
       if (err.name === 'AbortError') return;
-      console.warn('Web Share failed, using fallback', err);
     }
   }
 
-  // Fallback 1: WhatsApp
   const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url);
-
-  // Fallback 2: Copy to clipboard
   try {
     await navigator.clipboard.writeText(text + ' ' + url);
     showStatus('Link copied to clipboard! Paste it to share.', 'success');
   } catch (err) {
-    // Fallback 3: Open WhatsApp directly
     window.open(whatsappUrl, '_blank');
   }
 }
+
 function renderSafariDetail(s, rating) {
   const container = document.getElementById('mainContent');
   const avg = rating && rating.average ? rating.average : null;
@@ -425,13 +412,9 @@ function renderSafariDetail(s, rating) {
       (s.includes ? '<h2>What\'s included</h2><p>' + s.includes + '</p>' : '') +
       (s.terms ? '<h2>Terms &amp; conditions</h2><p>' + s.terms + '</p>' : '') +
       '<button class="book-btn-large" onclick="handleBookClick(' + s.id + ')">' +
-        (accessToken ? 'Book for ' + s.price_pi + ' π' : '🔒 Sign in to book') + 
-      '<button class="share-btn" onclick="shareSafari(' + s.id + ', \'' + s.name.replace(/'/g, "\\'") + '\', ' + s.price_pi + ')">📤 Share this safari</button>' +
-      '</button>'
-      '<button class="share-btn" onclick="shareSafari(' + s.id + ', \'' + s.name.replace(/'/g, "\\'") + '\', ' + s.price_pi + ')">📤 Share this safari</button>' + +       '<button class="book-btn-large" onclick="handleBookClick(' + s.id + ')">' +
         (accessToken ? 'Book for ' + s.price_pi + ' π' : '🔒 Sign in to book') +
       '</button>' +
-    '</div>' +
+      '<button class="share-btn" onclick="shareSafari(' + s.id + ', \'' + s.name.replace(/'/g, "\\'") + '\', ' + s.price_pi + ')">📤 Share this safari</button>' +
     '</div>' +
     '<div class="reviews-section" id="reviewsSection">' +
       '<h2>⭐ Reviews</h2>' +
@@ -500,8 +483,6 @@ function renderReviewForm(safariId) {
       '<p class="review-hint">You must have booked this safari to submit a review.</p>' +
     '</div>';
 }
-
-let currentRating = 0;
 
 function setRating(value) {
   currentRating = value;
@@ -587,7 +568,7 @@ async function renderListingsPage() {
   }
 }
 
-// ---------- Booking detail page ----------
+// ---------- Booking detail ----------
 async function renderBookingDetailPage(bookingId) {
   const container = document.getElementById('mainContent');
   container.innerHTML = '<div class="skeleton" style="height:400px;"></div>';
@@ -617,13 +598,9 @@ async function renderBookingDetailPage(bookingId) {
 
 function renderBookingDetail(b) {
   const container = document.getElementById('mainContent');
-  const days = b.duration_days
-    ? b.duration_days + ' day' + (b.duration_days > 1 ? 's' : '')
-    : '—';
+  const days = b.duration_days ? b.duration_days + ' day' + (b.duration_days > 1 ? 's' : '') : '—';
   const txid = b.txid || 'Not available';
-  const explorerUrl = b.txid
-    ? 'https://blockexplorer.minepi.com/transactions/' + b.txid
-    : null;
+  const explorerUrl = b.txid ? 'https://blockexplorer.minepi.com/transactions/' + b.txid : null;
 
   container.innerHTML =
     '<a href="/" class="back-link">← Back to safaris</a>' +
@@ -633,46 +610,27 @@ function renderBookingDetail(b) {
         '<h1>' + b.safari_name + '</h1>' +
         '<p class="booking-detail-loc">📍 ' + (b.location || 'Location unavailable') + '</p>' +
       '</div>' +
-      (b.image_url
-        ? '<img class="booking-detail-image" src="' + b.image_url + '" alt="' + b.safari_name + '" />'
-        : '') +
+      (b.image_url ? '<img class="booking-detail-image" src="' + b.image_url + '" alt="' + b.safari_name + '" />' : '') +
       '<div class="booking-detail-grid">' +
-        '<div class="booking-detail-item">' +
-          '<div class="detail-label">Amount paid</div>' +
-          '<div class="detail-value">' + b.price_pi + ' π</div>' +
-        '</div>' +
-        '<div class="booking-detail-item">' +
-          '<div class="detail-label">Duration</div>' +
-          '<div class="detail-value">' + days + '</div>' +
-        '</div>' +
-        '<div class="booking-detail-item">' +
-          '<div class="detail-label">Booked on</div>' +
-          '<div class="detail-value">' + new Date(b.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '</div>' +
-        '</div>' +
-        '<div class="booking-detail-item">' +
-          '<div class="detail-label">Booking ID</div>' +
-          '<div class="detail-value detail-mono">#' + b.id + '</div>' +
-        '</div>' +
+        '<div class="booking-detail-item"><div class="detail-label">Amount paid</div><div class="detail-value">' + b.price_pi + ' π</div></div>' +
+        '<div class="booking-detail-item"><div class="detail-label">Duration</div><div class="detail-value">' + days + '</div></div>' +
+        '<div class="booking-detail-item"><div class="detail-label">Booked on</div><div class="detail-value">' + new Date(b.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) + '</div></div>' +
+        '<div class="booking-detail-item"><div class="detail-label">Booking ID</div><div class="detail-value detail-mono">#' + b.id + '</div></div>' +
       '</div>' +
-      '<div class="booking-detail-section">' +
-        '<div class="detail-label">Payment ID</div>' +
-        '<div class="detail-value detail-mono detail-break">' + b.payment_id + '</div>' +
-      '</div>' +
+      '<div class="booking-detail-section"><div class="detail-label">Payment ID</div><div class="detail-value detail-mono detail-break">' + b.payment_id + '</div></div>' +
       '<div class="booking-detail-section">' +
         '<div class="detail-label">Blockchain transaction (TXID)</div>' +
         '<div class="detail-value detail-mono detail-break">' + txid + '</div>' +
-        (explorerUrl
-          ? '<a class="explorer-link" href="' + explorerUrl + '" target="_blank" rel="noopener">View on Pi Blockchain Explorer →</a>'
-          : '<p class="detail-hint">Transaction is still processing or unavailable.</p>') +
+        (explorerUrl ? '<a class="explorer-link" href="' + explorerUrl + '" target="_blank" rel="noopener">View on Pi Blockchain Explorer →</a>' : '<p class="detail-hint">Transaction is still processing or unavailable.</p>') +
       '</div>' +
       '<div class="booking-detail-actions">' +
         '<button onclick="navigate(\'/safari/' + b.safari_id + '\')">View Safari</button>' +
         '<button class="btn-secondary" onclick="navigate(\'/\')">Back to Listings</button>' +
       '</div>' +
     '</div>';
-}// ---------- Admin ----------
-let adminKey = null;
+}
 
+// ---------- Admin panel ----------
 function renderAdminPage() {
   const container = document.getElementById('mainContent');
 
@@ -736,16 +694,16 @@ function adminLogin() {
 
 function adminLogout() {
   adminKey = null;
+  adminTab = 'safaris';
   renderAdminPage();
 }
-// ---------- Admin: Messages tab ----------
-let adminTab = 'safaris';
 
 function switchAdminTab(tab) {
   adminTab = tab;
   renderAdminPage();
 }
 
+// ---------- Admin: Messages tab ----------
 async function loadAdminMessages() {
   const content = document.getElementById('adminContent');
   if (!content) return;
@@ -793,9 +751,7 @@ function renderAdminMessages(messages) {
         '</div>' +
         '<span class="booking-status ' + statusClass + '">' + m.status + '</span>' +
       '</div>' +
-      (m.safari_name
-        ? '<div class="message-safari">🎯 Interested in: ' + m.safari_name + '</div>'
-        : '') +
+      (m.safari_name ? '<div class="message-safari">🎯 Interested in: ' + m.safari_name + '</div>' : '') +
       '<p class="message-text">' + (m.message || '') + '</p>' +
       '<div class="message-footer">' +
         '<span class="message-date">' + date + '</span>' +
@@ -815,10 +771,7 @@ async function markMessage(id, status) {
   try {
     const res = await fetch('/api/admin/messages/' + id, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-key': adminKey,
-      },
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
       body: JSON.stringify({ status: status }),
     });
     if (res.ok) {
@@ -834,7 +787,6 @@ async function markMessage(id, status) {
 
 async function deleteMessage(id, name) {
   if (!confirm('Delete message from "' + name + '"? This cannot be undone.')) return;
-
   try {
     const res = await fetch('/api/admin/messages/' + id, {
       method: 'DELETE',
@@ -851,6 +803,8 @@ async function deleteMessage(id, name) {
     showStatus('Error deleting', 'error');
   }
 }
+
+// ---------- Admin: Safaris tab ----------
 async function loadAdminSafaris() {
   const content = document.getElementById('adminContent');
   if (!content) return;
@@ -901,6 +855,8 @@ function renderAdminList(safaris) {
       '<tbody>' + rows + '</tbody>' +
     '</table>';
 }
+
+// ---------- Admin: Safari form ----------
 function showNewSafariForm() {
   showSafariForm(null);
 }
@@ -980,24 +936,15 @@ async function saveSafari(id) {
     active: document.getElementById('f_active').checked ? 1 : 0,
   };
 
-  if (!body.name) {
-    showStatus('Name is required', 'error');
-    return;
-  }
-  if (!body.price_pi) {
-    showStatus('Price is required', 'error');
-    return;
-  }
+  if (!body.name) { showStatus('Name is required', 'error'); return; }
+  if (!body.price_pi) { showStatus('Price is required', 'error'); return; }
 
   try {
     const url = id ? '/api/admin/safaris/' + id : '/api/admin/safaris';
     const method = id ? 'PUT' : 'POST';
     const res = await fetch(url, {
       method: method,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-key': adminKey,
-      },
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
       body: JSON.stringify(body),
     });
 
@@ -1016,7 +963,6 @@ async function saveSafari(id) {
 
 async function deleteSafari(id, name) {
   if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
-
   try {
     const res = await fetch('/api/admin/safaris/' + id, {
       method: 'DELETE',
@@ -1033,27 +979,19 @@ async function deleteSafari(id, name) {
     showStatus('Error deleting', 'error');
   }
 }
+
 // ---------- Contact page ----------
 function renderContactPage() {
   const container = document.getElementById('mainContent');
-
   container.innerHTML =
     '<div class="contact-page">' +
       '<h2>📬 Contact SavannahGo</h2>' +
       '<p class="contact-intro">Have a question about a safari, a custom booking, or just want to say hi? Send us a message and we\'ll get back to you.</p>' +
       '<div class="contact-form">' +
-        '<label>Your name' +
-          '<input type="text" id="c_name" placeholder="e.g. Saige" />' +
-        '</label>' +
-        '<label>How can we reach you?' +
-          '<input type="text" id="c_contact" placeholder="Email, WhatsApp, or Pi username" />' +
-        '</label>' +
-        '<label>Which safari are you interested in?' +
-          '<select id="c_safari"><option value="">General inquiry</option></select>' +
-        '</label>' +
-        '<label>Message *' +
-          '<textarea id="c_message" rows="5" placeholder="Tell us what you\'d like to know..."></textarea>' +
-        '</label>' +
+        '<label>Your name<input type="text" id="c_name" placeholder="e.g. Saige" /></label>' +
+        '<label>How can we reach you?<input type="text" id="c_contact" placeholder="Email, WhatsApp, or Pi username" /></label>' +
+        '<label>Which safari are you interested in?<select id="c_safari"><option value="">General inquiry</option></select></label>' +
+        '<label>Message *<textarea id="c_message" rows="5" placeholder="Tell us what you\'d like to know..."></textarea></label>' +
         '<button onclick="submitContact()">Send Message</button>' +
         '<p id="contactResult" class="contact-result"></p>' +
       '</div>' +
@@ -1130,6 +1068,7 @@ async function submitContact() {
     result.className = 'contact-result error';
   }
 }
+
 // ---------- Privacy Policy ----------
 function renderPrivacyPage() {
   const container = document.getElementById('mainContent');
@@ -1138,10 +1077,8 @@ function renderPrivacyPage() {
       '<a href="/" class="back-link">← Back to safaris</a>' +
       '<h1>Privacy Policy</h1>' +
       '<p class="legal-updated">Last updated: September 22, 2026</p>' +
-
       '<h2>1. Introduction</h2>' +
       '<p>SavannahGo ("we", "our", or "the App") operates as a Pi Network application for discovering, booking, and paying for safaris across Africa. This Privacy Policy explains how we collect, use, and protect your information when you use our service.</p>' +
-
       '<h2>2. Information We Collect</h2>' +
       '<p>When you use SavannahGo, we may collect:</p>' +
       '<ul>' +
@@ -1150,41 +1087,25 @@ function renderPrivacyPage() {
         '<li><strong>Contact information:</strong> If you submit a contact form, we collect the name, contact method, and message you provide.</li>' +
         '<li><strong>Review content:</strong> Star ratings and comments you submit about safaris.</li>' +
       '</ul>' +
-
       '<h2>3. How We Use Your Information</h2>' +
-      '<p>We use collected information solely to:</p>' +
-      '<ul>' +
-        '<li>Authenticate you and maintain your session</li>' +
-        '<li>Process safari bookings and Pi payments</li>' +
-        '<li>Show your booking history and reviews</li>' +
-        '<li>Respond to contact inquiries</li>' +
-        '<li>Improve the App and its features</li>' +
-      '</ul>' +
-
+      '<p>We use collected information solely to authenticate you, process bookings and Pi payments, show your booking history and reviews, respond to inquiries, and improve the App.</p>' +
       '<h2>4. Information We Do NOT Collect</h2>' +
-      '<p>We do not collect or store:</p>' +
       '<ul>' +
         '<li>Your Pi Network passphrase or private key</li>' +
         '<li>Your wallet balance or private wallet addresses</li>' +
         '<li>Any passwords (authentication is handled entirely by the Pi SDK)</li>' +
         '<li>Your precise location or device identifiers</li>' +
       '</ul>' +
-
       '<h2>5. Data Storage</h2>' +
       '<p>Your data is stored securely using Turso (a cloud-hosted database). We retain your information for as long as your account is active or as needed to provide the service.</p>' +
-
       '<h2>6. Data Sharing</h2>' +
       '<p>We do not sell, rent, or share your personal information with third parties. Payment processing is handled entirely through the Pi Network blockchain and Platform APIs.</p>' +
-
       '<h2>7. Your Rights</h2>' +
       '<p>You may request deletion of your data by contacting us through the App\'s contact form. We will respond within a reasonable timeframe.</p>' +
-
       '<h2>8. Children\'s Privacy</h2>' +
       '<p>SavannahGo is not intended for users under the age required by Pi Network\'s terms of service. We do not knowingly collect information from children.</p>' +
-
       '<h2>9. Changes to This Policy</h2>' +
       '<p>We may update this Privacy Policy from time to time. Continued use of the App after changes constitutes acceptance of the updated policy.</p>' +
-
       '<h2>10. Contact Us</h2>' +
       '<p>For questions about this Privacy Policy, please use the <a href="/contact">Contact page</a>.</p>' +
     '</div>';
@@ -1198,46 +1119,33 @@ function renderTermsPage() {
       '<a href="/" class="back-link">← Back to safaris</a>' +
       '<h1>Terms of Service</h1>' +
       '<p class="legal-updated">Last updated: September 22, 2026</p>' +
-
       '<h2>1. Acceptance of Terms</h2>' +
       '<p>By using SavannahGo ("the App"), you agree to these Terms of Service. If you do not agree, please do not use the App.</p>' +
-
       '<h2>2. About SavannahGo</h2>' +
       '<p>SavannahGo is a Pi Network application that allows Pioneers to discover, book, and pay for safaris across Africa using Pi cryptocurrency.</p>' +
-
       '<h2>3. Eligibility</h2>' +
       '<p>You must have a valid Pi Network account and be of legal age in your jurisdiction to use this App.</p>' +
-
       '<h2>4. Payments</h2>' +
       '<p>All transactions are conducted exclusively in Pi (π). Payment amounts are displayed in Pi before you confirm any transaction. Once a payment is completed on the Pi blockchain, it is final and cannot be reversed.</p>' +
-
       '<h2>5. Bookings</h2>' +
       '<p>When you book a safari, you are expressing intent to purchase. Actual safari delivery is coordinated between you and the tour operator. SavannahGo acts as a marketplace and payment platform.</p>' +
-
       '<h2>6. Refunds</h2>' +
       '<p>Refunds are handled on a case-by-case basis according to the terms of each specific safari. Please review the "Terms &amp; conditions" section on each safari listing before booking.</p>' +
-
       '<h2>7. User Conduct</h2>' +
-      '<p>You agree not to:</p>' +
       '<ul>' +
         '<li>Submit false, misleading, or fraudulent information</li>' +
         '<li>Attempt to manipulate payments or pricing</li>' +
         '<li>Post abusive or inappropriate reviews</li>' +
         '<li>Use the App for any illegal purpose</li>' +
       '</ul>' +
-
       '<h2>8. Reviews</h2>' +
       '<p>Reviews may only be submitted by users who have completed a booking for the specific safari. We reserve the right to remove reviews that violate these terms.</p>' +
-
       '<h2>9. Limitation of Liability</h2>' +
       '<p>SavannahGo is provided "as is". We are not liable for issues arising from third-party tour operators, Pi Network outages, or blockchain-related delays.</p>' +
-
       '<h2>10. Intellectual Property</h2>' +
       '<p>All content, branding, and code of SavannahGo are protected. You may not copy or redistribute without permission.</p>' +
-
       '<h2>11. Changes to Terms</h2>' +
       '<p>We may modify these Terms at any time. Continued use of the App constitutes acceptance of any updates.</p>' +
-
       '<h2>12. Contact</h2>' +
       '<p>For questions, please use the <a href="/contact">Contact page</a>.</p>' +
     '</div>';
@@ -1249,11 +1157,12 @@ function route() {
 
   if (path === '/' || path === '/index.html') {
     renderListingsPage();
-  } else if (path === '/contact') {  } else if (path === '/privacy') {
+  } else if (path === '/contact') {
+    renderContactPage();
+  } else if (path === '/privacy') {
     renderPrivacyPage();
   } else if (path === '/terms') {
     renderTermsPage();
-    renderContactPage();
   } else if (path === '/admin') {
     renderAdminPage();
   } else if (path.indexOf('/safari/') === 0) {
@@ -1262,13 +1171,10 @@ function route() {
   } else if (path.indexOf('/booking/') === 0) {
     const id = path.split('/')[2];
     renderBookingDetailPage(id);
-  }  else {
+  } else {
     renderListingsPage();
   }
 }
-
-console.log('APP LOADED. Path =', window.location.pathname);
-
 
 // ---------- Navigation ----------
 function navigate(url) {
