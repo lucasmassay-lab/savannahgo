@@ -428,7 +428,121 @@ app.post('/api/messages', async (req, res) => {
 
 // -------- Admin: list messages ----------
 app.get('/api/admin/messages', requireAdmin, async (req, res) => {
+  try {// -------- Admin: list all bookings ----------
+app.get('/api/admin/bookings', requireAdmin, async (req, res) => {
   try {
+    const result = await db.execute({
+      sql: `SELECT b.id, b.payment_id, b.uid, b.safari_id, b.safari_name,
+                   b.price_pi, b.status, b.created_at,
+                   p.txid,
+                   u.username
+            FROM bookings b
+            LEFT JOIN payments p ON p.payment_id = b.payment_id
+            LEFT JOIN users u ON u.uid = b.uid
+            ORDER BY b.created_at DESC
+            LIMIT 200`,
+      args: [],
+    });
+// -------- Wishlist: add a safari ----------
+app.post('/api/wishlist', async (req, res) => {
+  const { safariId } = req.body;
+  const accessToken = req.headers.authorization?.replace('Bearer ', '');
+
+  if (!safariId) return res.status(400).json({ error: 'safariId required' });
+  if (!accessToken) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const piRes = await fetch(`${PI_API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!piRes.ok) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await piRes.json();
+
+    await db.execute({
+      sql: `INSERT INTO wishlist (uid, safari_id) VALUES (?, ?)
+            ON CONFLICT(uid, safari_id) DO NOTHING`,
+      args: [user.uid, safariId],
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('>>> DB ERROR adding wishlist:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- Wishlist: remove a safari ----------
+app.delete('/api/wishlist/:safariId', async (req, res) => {
+  const safariId = parseInt(req.params.safariId, 10);
+  const accessToken = req.headers.authorization?.replace('Bearer ', '');
+
+  if (isNaN(safariId)) return res.status(400).json({ error: 'Invalid safari id' });
+  if (!accessToken) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const piRes = await fetch(`${PI_API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!piRes.ok) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await piRes.json();
+
+    await db.execute({
+      sql: 'DELETE FROM wishlist WHERE uid = ? AND safari_id = ?',
+      args: [user.uid, safariId],
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('>>> DB ERROR removing wishlist:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- Wishlist: list user's favorites ----------
+app.get('/api/wishlist', async (req, res) => {
+  const accessToken = req.headers.authorization?.replace('Bearer ', '');
+  if (!accessToken) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const piRes = await fetch(`${PI_API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!piRes.ok) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await piRes.json();
+
+    const result = await db.execute({
+      sql: `SELECT w.id, w.safari_id, w.created_at,
+                   s.name, s.location, s.price_pi, s.duration_days, s.image_url
+            FROM wishlist w
+            JOIN safaris s ON s.id = w.safari_id
+            WHERE w.uid = ?
+            ORDER BY w.created_at DESC`,
+      args: [user.uid],
+    });
+
+    res.json({ wishlist: result.rows });
+  } catch (err) {
+    console.error('>>> DB ERROR listing wishlist:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+    // Summary stats
+    const summary = await db.execute(`
+      SELECT COUNT(*) as total_count,
+             COALESCE(SUM(price_pi), 0) as total_pi
+      FROM bookings
+    `);
+
+    res.json({
+      bookings: result.rows,
+      summary: summary.rows[0] || { total_count: 0, total_pi: 0 },
+    });
+  } catch (err) {
+    console.error('>>> DB ERROR admin bookings:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
     const result = await db.execute('SELECT * FROM messages ORDER BY created_at DESC');
     res.json({ messages: result.rows });
   } catch (err) {

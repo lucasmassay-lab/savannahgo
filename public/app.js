@@ -116,18 +116,22 @@ function renderFilteredSafaris() {
 
   grid.innerHTML = filteredSafaris.map(function (s) {
     const days = s.duration_days + ' day' + (s.duration_days > 1 ? 's' : '');
-    return '<a href="/safari/' + s.id + '" class="safari-card">' +
-      '<img src="' + s.image_url + '" alt="' + s.name + '" loading="lazy" />' +
-      '<div class="safari-body">' +
-        '<h3>' + s.name + '</h3>' +
-        '<div class="safari-loc">📍 ' + s.location + '</div>' +
-        '<div class="safari-desc">' + s.description + '</div>' +
-        '<div class="safari-meta">' +
-          '<div class="safari-price">' + s.price_pi + ' π <small>' + days + '</small></div>' +
-          '<span class="view-btn">View →</span>' +
+    const heart = isWishlisted(s.id) ? '❤️' : '🤍';
+    return '<div class="safari-card-wrap">' +
+      '<button class="heart-btn" onclick="toggleWishlist(' + s.id + ', event)" title="Save to favorites">' + heart + '</button>' +
+      '<a href="/safari/' + s.id + '" class="safari-card">' +
+        '<img src="' + s.image_url + '" alt="' + s.name + '" loading="lazy" />' +
+        '<div class="safari-body">' +
+          '<h3>' + s.name + '</h3>' +
+          '<div class="safari-loc">📍 ' + s.location + '</div>' +
+          '<div class="safari-desc">' + s.description + '</div>' +
+          '<div class="safari-meta">' +
+            '<div class="safari-price">' + s.price_pi + ' π <small>' + days + '</small></div>' +
+            '<span class="view-btn">View →</span>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-    '</a>';
+      '</a>' +
+    '</div>';
   }).join('');
 }
 
@@ -330,6 +334,102 @@ function renderBookings(bookings) {
     '</a>';
   }).join('');
 }
+// ---------- Wishlist ----------
+let userWishlist = [];
+
+async function loadWishlist() {
+  if (!accessToken) {
+    userWishlist = [];
+    return;
+  }
+  try {
+    const res = await fetch('/api/wishlist', {
+      headers: { Authorization: 'Bearer ' + accessToken },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    userWishlist = (data.wishlist || []).map(function (w) { return w.safari_id; });
+    renderWishlistSection(data.wishlist || []);
+  } catch (err) {
+    console.error('Failed to load wishlist', err);
+  }
+}
+
+function isWishlisted(safariId) {
+  return userWishlist.indexOf(safariId) > -1;
+}
+
+async function toggleWishlist(safariId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  if (!accessToken) {
+    showStatus('Sign in to save favorites', 'info');
+    return;
+  }
+
+  const isSaved = isWishlisted(safariId);
+
+  try {
+    const res = await fetch('/api/wishlist' + (isSaved ? '/' + safariId : ''), {
+      method: isSaved ? 'DELETE' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken,
+      },
+      body: isSaved ? null : JSON.stringify({ safariId: safariId }),
+    });
+
+    if (res.ok) {
+      if (isSaved) {
+        userWishlist = userWishlist.filter(function (id) { return id !== safariId; });
+        showStatus('Removed from favorites', 'info');
+      } else {
+        userWishlist.push(safariId);
+        showStatus('❤️ Added to favorites', 'success');
+      }
+      if (window.location.pathname === '/') {
+        renderFilteredSafaris();
+        loadWishlist();
+      } else if (window.location.pathname.indexOf('/safari/') === 0) {
+        route();
+      }
+    } else {
+      showStatus('Could not update favorites', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('Error updating favorites', 'error');
+  }
+}
+
+function renderWishlistSection(items) {
+  const section = document.getElementById('wishlistSection');
+  const list = document.getElementById('wishlistList');
+  if (!section || !list) return;
+
+  if (!items || items.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  list.innerHTML = items.map(function (s) {
+    return '<a href="/safari/' + s.safari_id + '" class="safari-card">' +
+      '<img src="' + s.image_url + '" alt="' + s.name + '" loading="lazy" />' +
+      '<div class="safari-body">' +
+        '<h3>' + s.name + '</h3>' +
+        '<div class="safari-loc">📍 ' + s.location + '</div>' +
+        '<div class="safari-meta">' +
+          '<div class="safari-price">' + s.price_pi + ' π</div>' +
+          '<span class="view-btn">View →</span>' +
+        '</div>' +
+      '</div>' +
+    '</a>';
+  }).join('');
+}
 
 // ---------- Safari detail ----------
 async function renderDetailPage(id) {
@@ -385,7 +485,7 @@ function renderSafariDetail(s, rating) {
   const container = document.getElementById('mainContent');
   const avg = rating && rating.average ? rating.average : null;
   const count = rating && rating.count ? rating.count : 0;
-  const days = s.duration_days + ' day' + (s.duration_days > 1 ? 's' : '');
+  const days = s.duration_days + ' day' + (s.duration_days > 1 ? 's' : '');  const heart = isWishlisted(s.id) ? '❤️' : '🤍';
 
   const ratingHtml = count > 0
     ? '<div class="rating-summary"><span class="stars">' + renderStars(avg) + '</span><span class="rating-text">' + avg + ' · ' + count + ' review' + (count > 1 ? 's' : '') + '</span></div>'
@@ -393,7 +493,8 @@ function renderSafariDetail(s, rating) {
 
   container.innerHTML =
     '<a href="/" class="back-link">← Back to safaris</a>' +
-    '<div class="detail-hero">' +
+      '<div class="detail-hero">' +
+      '<button class="heart-btn heart-btn-large" onclick="toggleWishlist(' + s.id + ', event)" title="Save to favorites">' + heart + '</button>' +
       '<img src="' + s.image_url + '" alt="' + s.name + '" />' +
       '<div class="detail-overlay">' +
         '<h1>' + s.name + '</h1>' +
@@ -554,6 +655,10 @@ async function renderListingsPage() {
       '</div>' +
       '<p id="filterResultCount" class="filter-count"></p>' +
     '</section>' +
+    '<section class="bookings-section" id="wishlistSection" style="display:none;">' +
+      '<h2>❤️ My Favorites</h2>' +
+      '<div id="wishlistList" class="safari-grid"></div>' +
+    '</section>' +
     '<section class="bookings-section" id="bookingsSection" style="display:none;">' +
       '<h2>🎫 My Bookings</h2>' +
       '<div id="bookingsList"></div>' +
@@ -658,16 +763,20 @@ function renderAdminPage() {
     '</div>' +
     '<div class="admin-tabs">' +
       '<button class="admin-tab ' + (tab === 'safaris' ? 'active' : '') + '" onclick="switchAdminTab(\'safaris\')">Safaris</button>' +
+      '<button class="admin-tab ' + (tab === 'bookings' ? 'active' : '') + '" onclick="switchAdminTab(\'bookings\')">Bookings</button>' +
       '<button class="admin-tab ' + (tab === 'messages' ? 'active' : '') + '" onclick="switchAdminTab(\'messages\')">Messages</button>' +
     '</div>' +
     '<div id="adminContent">Loading...</div>';
 
   if (tab === 'messages') {
     loadAdminMessages();
+  } else if (tab === 'bookings') {
+    loadAdminBookings();
   } else {
     loadAdminSafaris();
   }
 }
+
 
 function adminLogin() {
   const input = document.getElementById('adminKeyInput');
@@ -803,7 +912,81 @@ async function deleteMessage(id, name) {
     showStatus('Error deleting', 'error');
   }
 }
+// ---------- Admin: Bookings tab ----------
+async function loadAdminBookings() {
+  const content = document.getElementById('adminContent');
+  if (!content) return;
 
+  content.innerHTML = 'Loading bookings...';
+
+  try {
+    const res = await fetch('/api/admin/bookings', {
+      headers: { 'x-admin-key': adminKey },
+    });
+    if (!res.ok) {
+      content.innerHTML = '<p>Error loading bookings.</p>';
+      return;
+    }
+    const data = await res.json();
+    renderAdminBookings(data.bookings || [], data.summary || { total_count: 0, total_pi: 0 });
+  } catch (err) {
+    console.error(err);
+    content.innerHTML = '<p>Error loading bookings.</p>';
+  }
+}
+
+function renderAdminBookings(bookings, summary) {
+  const content = document.getElementById('adminContent');
+  if (!content) return;
+
+  const summaryHtml =
+    '<div class="booking-summary">' +
+      '<div class="summary-item">' +
+        '<div class="summary-label">Total Bookings</div>' +
+        '<div class="summary-value">' + summary.total_count + '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+        '<div class="summary-label">Total Pi Earned</div>' +
+        '<div class="summary-value">' + summary.total_pi + ' π</div>' +
+      '</div>' +
+    '</div>';
+
+  if (bookings.length === 0) {
+    content.innerHTML = summaryHtml + '<p class="empty-state">No bookings yet.</p>';
+    return;
+  }
+
+  let rows = '';
+  bookings.forEach(function (b) {
+    const date = new Date(b.created_at).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+    const txidShort = b.txid ? b.txid.substring(0, 10) + '...' : '—';
+
+    rows += '<tr>' +
+      '<td class="detail-mono">#' + b.id + '</td>' +
+      '<td>' + (b.username || 'Anonymous') + '</td>' +
+      '<td>' + b.safari_name + '</td>' +
+      '<td><strong>' + b.price_pi + ' π</strong></td>' +
+      '<td><span class="booking-status status-' + b.status + '">' + b.status + '</span></td>' +
+      '<td class="detail-mono detail-break">' + txidShort + '</td>' +
+      '<td>' + date + '</td>' +
+      '<td>' + (b.txid ? '<a class="explorer-link" href="https://blockexplorer.minepi.com/transactions/' + b.txid + '" target="_blank">View</a>' : '—') + '</td>' +
+    '</tr>';
+  });
+
+  content.innerHTML =
+    summaryHtml +
+    '<div style="overflow-x: auto;">' +
+      '<table class="admin-table">' +
+        '<thead><tr>' +
+          '<th>ID</th><th>User</th><th>Safari</th><th>Amount</th>' +
+          '<th>Status</th><th>TXID</th><th>Date</th><th>TX</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
 // ---------- Admin: Safaris tab ----------
 async function loadAdminSafaris() {
   const content = document.getElementById('adminContent');
