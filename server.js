@@ -1,3 +1,4 @@
+// SavannahGo server — version 2026-09-23-2
 const express = require('express');
 const db = require('./db');
 const app = express();
