@@ -397,6 +397,9 @@ async function toggleWishlist(safariId, event) {
         route();
       }
     } else {
+      const errBody = await res.text();
+      console.error('WISHLIST ERROR', res.status, errBody);
+      alert('Wishlist error: ' + res.status + ' - ' + errBody);
       showStatus('Could not update favorites', 'error');
     }
   } catch (err) {
@@ -669,6 +672,7 @@ async function renderListingsPage() {
   attachFilterHandlers();
 
   if (accessToken) {
+    loadWishlist();
     loadBookings();
   }
 }
