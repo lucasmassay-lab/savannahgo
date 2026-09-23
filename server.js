@@ -465,6 +465,7 @@ app.post('/api/wishlist', async (req, res) => {
     });
 
     res.json({ ok: true });
+        console.log('>>> Wishlist add:', user.username, 'safari', safariId);
   } catch (err) {
     console.error('>>> DB ERROR adding wishlist:', err.message);
     res.status(500).json({ error: err.message });
@@ -492,6 +493,7 @@ app.delete('/api/wishlist/:safariId', async (req, res) => {
     });
 
     res.json({ ok: true });
+        console.log('>>> Wishlist remove:', user.username, 'safari', safariId);
   } catch (err) {
     console.error('>>> DB ERROR removing wishlist:', err.message);
     res.status(500).json({ error: err.message });
